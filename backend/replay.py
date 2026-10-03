@@ -1,7 +1,27 @@
 """Replay Lab and Side-Effect Suppression Engine for BLACKBOX.
 
-Enables safe counterfactual re-execution from checkpoints with mutating tool suppression
-and experimental output diff generation.
+Counterfactual replay model
+───────────────────────────
+BLACKBOX operates in *fixture-propagation* replay mode:
+
+* Steps **before** the intervention checkpoint are REUSED verbatim from the
+  recorded trace — their outputs are never re-computed.
+* The intervention step is re-executed with the MODIFIED input against a
+  deterministic operation registry (pure functions registered per tool name).
+* Steps **after** the intervention that depend on its output are REPLAYED
+  through the same registry, with state propagated forward.
+* Any step whose tool name appears in SIDE_EFFECT_TOOLS is BLOCKED and
+  receives a synthetic safe response — the real external call is never made.
+
+This is explicitly labelled "fixture-propagation / deterministic-registry
+replay" in every API response.  It is NOT a live agent restart.
+
+Per-step status values surfaced to the client
+─────────────────────────────────────────────
+  REUSED    — original output kept, step not re-executed
+  MODIFIED  — intervention point, input was changed
+  REPLAYED  — re-executed with propagated state
+  BLOCKED   — side-effect tool, execution suppressed
 """
 from datetime import datetime, timezone
 import json
@@ -179,6 +199,7 @@ class ReplayEngine:
                 "input_data": orig_s.get("input_data", {}),
                 "output_data": orig_s.get("output_data", {}),
                 "replayed": False,
+                "replay_status_label": "REUSED",
                 "is_intervention_point": False,
             })
 
@@ -242,6 +263,7 @@ class ReplayEngine:
                 "input_data": step_input,
                 "output_data": out_data,
                 "replayed": True,
+                "replay_status_label": "BLOCKED" if was_suppressed else ("MODIFIED" if is_intervention else "REPLAYED"),
                 "is_intervention_point": is_intervention,
                 "side_effect_suppressed": was_suppressed,
             }
@@ -264,14 +286,21 @@ class ReplayEngine:
             "intervention_step_id": intervention_step_id,
             "modified_input": modified_input,
             "replay_status": overall_status,
+            "replay_mode": "fixture-propagation / deterministic-registry",
+            "replay_mode_note": (
+                "Steps before the checkpoint are REUSED from the original trace. "
+                "The intervention step is MODIFIED and re-executed via the deterministic "
+                "operation registry. Downstream steps are REPLAYED with propagated state. "
+                "Side-effect tools are BLOCKED and never called externally. "
+                "This is NOT a live agent restart."
+            ),
             "replayed_steps": replayed_steps,
             "suppressed_side_effects": suppressed_side_effects,
             "diff_summary": diffs,
             "experimental_evidence_notes": (
-                "Experimental evidence only (counterfactual execution). "
-                "Intervention prevented arithmetic overflow and allowed downstream steps to complete successfully."
-                if overall_status == "SUCCESS"
-                else "Experimental run failed under provided parameters."
+                "Experimental evidence only — counterfactual execution under modified input. "
+                "This replay shows what would have happened under the intervention; "
+                "it does not constitute formal proof of causality."
             ),
         }
 
