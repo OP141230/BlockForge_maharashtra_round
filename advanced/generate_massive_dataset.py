@@ -46,8 +46,17 @@ def run_one(base_dir, task, fault_config):
     agent = TravelAgent(task=task, recorder=recorder, fault_config=fault_config)
     return agent.run()
 
+def _discard(split_dir, trace):
+    """Remove a mislabelled trace (and its checkpoints) from disk."""
+    tid = trace.get("trace_id")
+    for name in os.listdir(split_dir):
+        if tid and tid in name:
+            path = os.path.join(split_dir, name)
+            shutil.rmtree(path) if os.path.isdir(path) else os.remove(path)
+
+
 def main():
-    print("Phase 9A: Generating Massive 1500+ Trace Dataset...")
+    print("Phase 9A: Generating labelled trace dataset (count is printed per split)...")
     rng = random.Random(42)
     
     splits = {
@@ -64,15 +73,22 @@ def main():
         split_dir = os.path.join(base_root, split_name)
         os.makedirs(split_dir, exist_ok=True)
         generated = 0
+        skipped = 0
         for origin, dest in routes:
             for scenario in scenarios:
                 for _ in range(count):
-                    task = generate_task(rng, origin, dest)
-                    trace = run_one(split_dir, task, scenario.get("fault_config"))
-                    if trace["status"] != scenario["expected_status"]:
-                        print(f"Warning: {scenario['name']} on {origin}-{dest} yielded {trace['status']}")
-                    generated += 1
-        print(f"  {split_name}: {generated} traces generated.")
+                    # Resample the task until the observed status matches the label,
+                    # so every committed label is truthful (e.g. a 5000 budget can make
+                    # a clean run fail legitimately). Give up after a few tries.
+                    for _attempt in range(10):
+                        task = generate_task(rng, origin, dest)
+                        trace = run_one(split_dir, task, scenario.get("fault_config"))
+                        if trace["status"] == scenario["expected_status"]:
+                            generated += 1
+                            break
+                        _discard(split_dir, trace)
+                        skipped += 1
+        print(f"  {split_name}: {generated} traces kept, {skipped} mismatched runs discarded.")
 
 if __name__ == "__main__":
     main()
