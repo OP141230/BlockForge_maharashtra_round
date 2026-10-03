@@ -30,10 +30,11 @@ def load_ranker(model_path: str = "data/models/ranker.json") -> Dict[str, Any]:
     Loads the Phase 4 ranker model.
     """
     if not os.path.exists(model_path):
-        return {
-            "weights": {},
-            "bias": 0.0,
-        }
+        raise FileNotFoundError(
+            f"Ranker model not found at {model_path!r}. Run `python run_all.py` "
+            "(or generate_training_dataset.py then train_ranker.py) first. "
+            "Refusing to fall back to empty weights: that silently blames the first step."
+        )
 
     with open(model_path, "r", encoding="utf-8") as f:
         return json.load(f)

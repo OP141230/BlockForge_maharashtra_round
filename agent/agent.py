@@ -249,13 +249,22 @@ class TravelAgent:
                 "booking_id": "BK-1000",
                 "flight": selected_flight,
                 "hotel": selected_hotel,
-                "total_price": selected_flight.get("price", 0) + selected_hotel.get("price", 0),
+                "total_price": selected_flight.get("price", 0) + selected_hotel.get("price_per_night", selected_hotel.get("price", 0)),
             }
         state["booking"] = booking
         return {"booking": booking}
 
     def _validate_final_result(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        constraints = state.get("constraints", {})
+        # Validate against the immutable task, NOT state["constraints"]: faults
+        # corrupt that state, and checking it against itself hides the failure.
+        t = self.task
+        constraints = {
+            "origin": t.get("origin"),
+            "destination": t.get("destination"),
+            "date": t.get("date"),
+            "flight_price_max": t.get("budget", 0),
+            "hotel_checkin_after": t.get("hotel_checkin_after", "00:00"),
+        }
         booking = state.get("booking")
         violations = []
 
