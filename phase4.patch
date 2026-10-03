@@ -1,0 +1,553 @@
+From bd41e6208c3827e5d994f6457c44dbc63610181d Mon Sep 17 00:00:00 2001
+From: dev <dev@example.com>
+Date: Sat, 3 Oct 2026 19:10:17 +0000
+Subject: [PATCH] Phase 4: label-free tests, output invariants, relabel
+ ignored_empty_result, 5 persistent defects, logging, model_ordering measured
+
+---
+ README.md                            | 88 ++++++++++++++++------------
+ advanced/counterfactual_search.py    | 11 +++-
+ advanced/evaluate_persistent.py      | 47 +++++++++++----
+ advanced/generate_massive_dataset.py |  2 +-
+ advanced/rigorous_evaluation.py      |  2 +-
+ agent/agent.py                       | 21 +++++--
+ diagnosis/spec_engine.py             | 47 +++++++++++++++
+ generate_dataset.py                  |  2 +-
+ generate_more_traces.py              |  4 +-
+ generate_training_dataset.py         |  2 +-
+ tests/fixtures/ranker.json           | 34 +++++------
+ tests/test_label_free.py             | 39 ++++++++++++
+ 12 files changed, 223 insertions(+), 76 deletions(-)
+ create mode 100644 tests/test_label_free.py
+
+diff --git a/README.md b/README.md
+index 2fe5973..e7bd696 100644
+--- a/README.md
++++ b/README.md
+@@ -157,8 +157,9 @@ violations removed/added) is stored with it.
+ a contrastive dataset; a logistic regression over intervention type, target
+ step and violation statistics is trained on it. It annotates each proposal
+ with a predicted fix probability, shown in the replay card. Using it to order
+-attempts is implemented (`model_ordering=True` in `search_fix`) but off by
+-default, so the validated search order is unchanged.
++attempts is implemented (`model_ordering=True` in `search_fix`) and measured by
++`advanced/evaluate_persistent.py`; it gives no gain, so it is off by default.
++Model-loading and scoring failures are logged, not swallowed.
+ 
+ **Trace comparison.** Two traces aligned by step name are diffed recursively
+ over inputs, outputs and final state. The Replay Diff Lab tab renders the
+@@ -204,6 +205,9 @@ replay and are recorded in `trace["defects"]`.
+ |---|---|---|
+ | select_reads_unfiltered_list | select_cheapest_flight | reads the unfiltered list, picks the most expensive flight |
+ | hotel_filter_inverted | filter_hotels_by_checkin | inverted comparison keeps early check-ins |
++| search_swaps_route | search_flights | origin and destination passed the wrong way round |
++| hotel_search_stale_date | search_hotels | queries the day before the trip |
++| budget_filter_inverted | filter_flights_by_budget | keeps flights at or above the budget |
+ 
+ Replaying these without a patch cannot work. The search must pick the right
+ step and the right intervention (`disable_step_defect`, which re-executes with
+@@ -220,34 +224,34 @@ trivial baseline: blame the earliest step the spec engine flagged.
+ 
+ | Set | n | Ranker top-1 | Baseline top-1 |
+ |---|---|---|---|
+-| Held-out test split (seen families) | 24 | 0.83 (top-3 1.00) | not measured |
+-| Unseen families (zero-shot) | 20 | 0.55 | 0.75 |
+-| Persistent defects | 10 | 1.00 | 1.00 |
++| Seen families, new runs | 90 | 1.00 | 1.00 |
++| Unseen families | 60 | 0.75 | 0.75 |
++| Unseen routes | 99 | 0.86 | 0.86 |
++| Persistent defects (5 kinds) | 25 | 1.00 | 1.00 |
+ 
+-On unseen families the ranker is *worse* than the baseline of blaming the
+-earliest spec violation (0.55 vs 0.75): the hand-set weights overfit the seen
+-families, e.g. `hotel_wrong_date` drops to 0.20 against 1.00. On the unseen
+-`budget_filter_disabled` family both score 0/5: the filter at step 4 is the
+-root cause, but the violation first shows at step 5. The spec engine does most
+-of the localizing on this agent; the learned weights do not yet add value.
++The ranker ties the baseline on every set. The spec engine does the
++localizing on this agent; the learned weights add nothing measurable.
+ 
+ **Fixing.**
+ 
+-- Fault-aware checkpointed replay: 5/6 known traces fixed. It picks the patch from
+-  the ground-truth label, so it demonstrates the machinery rather than diagnosis.
++- Fault-aware checkpointed replay: 6/6 known traces fixed. It picks the patch
++  from the ground-truth label, so it demonstrates the machinery, not diagnosis.
+ - Generic counterfactual search, no fault labels: 6/6 known and 20/20 unseen
+   injected-fault traces fixed. 20/20 are fixed on the first attempt, mostly by
+   `replay_no_patch`, i.e. by turning the injection off (see above).
+-- Persistent defects: plain replay fixes 0/10; the search fixes 10/10, never on
+-  the first attempt, averaging 2.5 attempts, always via `disable_step_defect`
+-  at the correct step.
++- Persistent defects (5 kinds, 25 traces): plain replay fixes 0/25; the search
++  fixes 25/25, never on the first attempt, averaging 2.8 attempts, always via
++  `disable_step_defect` at the correct step (5 of each kind).
++- Ordering attempts by the intervention model (`model_ordering=True`) is
++  measured in the same benchmark: it changes nothing (2.8 vs 2.8 attempts), so
++  it stays off.
+ 
+ **Intervention model.** Training accuracy is about 0.92 on 60
+ contrastive attempts; accuracy on held-out traces (grouped CV, whole traces
+-left out) is 0.81 +/- 0.19 against a 0.52 majority-class baseline. Written
++left out) is 0.96 +/- 0.08 against a 0.57 majority-class baseline. Written
+ to `data/models/intervention_model_metrics.json`. It annotates proposals only.
+ 
+-**Ranker (phase 3).** The ranker is an L2-regularised, class-balanced logistic
++**Ranker.** The ranker is an L2-regularised, class-balanced logistic
+ regression (scaler folded into plain weights and a fitted bias) over 14
+ per-step features: spec-violation signals, plus causal features (data-flow
+ distance to the earliest violation, and "changed state outside the step's
+@@ -261,29 +265,37 @@ Held-out top-1 on failed traces (`advanced/rigorous_evaluation.py`, trained on
+ |---|---|---|---|
+ | seen faults, new runs | 90 | 1.00 | 1.00 |
+ | unseen fault families | 60 | 0.75 | 0.75 |
+-| unseen routes | 99 | 0.87 | 0.86 |
++| unseen routes | 99 | 0.86 | 0.86 |
+ 
+ Stricter checks (`advanced/ranker_generalization.py`):
+ 
+ | Protocol | Ranker | Baseline |
+ |---|---|---|
+-| leave one fault family out (10 families) | 0.81 | 0.94 |
+-| leave one root step out | 0.69 | 0.94 |
+-
+-The ranker matches the baseline on the standard splits and is **worse** under
+-the stricter ones. It does not beat "blame the earliest violation". Two reasons:
+-
+-- `budget_filter_disabled` (root = step 4) is injected as a hidden flag that
+-  makes the *selector* misbehave, so its observable symptoms are the same as
+-  `budget_violation` (root = step 5). Only the undeclared state write tells them
+-  apart.
+-- Labelling is inconsistent: `budget_filter_disabled` is labelled at its
+-  injection site, while `ignored_empty_result` is labelled at the step that
+-  mishandled the empty result, not where its flag is injected (step 3). A model
+-  cannot learn one rule that fits both.
+-
+-The causal features were designed after seeing these failures, so
+-`budget_filter_disabled` is no longer a clean zero-shot test.
++| leave one fault family out (10 families) | 0.83 | 0.94 |
++| leave one root step out | 0.83 | 0.94 |
++
++The ranker ties the baseline on the standard splits and is **worse** under the
++stricter ones, so it does not beat "blame the earliest violation". The failures
++are concentrated in the `budget_violation` / `budget_filter_disabled` pair: they
++show the same symptom (an over-budget flight at step 5) but have different
++labelled roots (step 5 vs step 4), and only a hidden injected flag tells them
++apart. Hold either one out and the model learns the other's mapping. The
++same pair is why `unseen_fault` is stuck at 0.75.
++
++Notes on how this was reached, so the numbers are not over-read:
++
++- `ignored_empty_result` is labelled at step 3, its injection site (the replay
++  engine already restarted it there), matching the other families. It was
++  step 5 before, which made the labelling inconsistent. This was a labelling
++  decision made after seeing the results.
++- The spec engine now also checks search *outputs* (results non-empty, flights
++  and hotels match the task). Without it, wrong results from a buggy search were
++  not flagged until a later step.
++- Dropping `is_earliest_violation` scores 1.00 / 0.96 on the unseen splits but
++  0.20 on persistent defects and worse leave-one-family-out, so it was kept.
++  That choice used held-out data, so treat the unseen scores as optimistic.
++- The causal features were designed after seeing `budget_filter_disabled` fail,
++  so it is not a clean zero-shot family any more.
+ 
+ Other numbers from the evaluation script:
+ 
+@@ -295,6 +307,10 @@ Other numbers from the evaluation script:
+   0.01, so no feature is individually critical. The spec engine carries the signal.
+ - Everything is synthetic: injected faults on one mock agent.
+ 
++Label-free diagnosis is tested, not just claimed: `tests/test_label_free.py`
++checks that the search returns the same result with `ground_truth` removed from
++the trace and that the search path never references labels.
++
+ ## UI
+ 
+ `streamlit run ui/animated_app.py` opens four tabs.
+diff --git a/advanced/counterfactual_search.py b/advanced/counterfactual_search.py
+index b74d1ea..1890106 100644
+--- a/advanced/counterfactual_search.py
++++ b/advanced/counterfactual_search.py
+@@ -1,4 +1,5 @@
+ import json
++import logging
+ import os
+ from typing import Any, Dict, List, Optional
+ 
+@@ -25,6 +26,9 @@ def _safe_list(value: Any) -> List[Any]:
+     return []
+ 
+ 
++log = logging.getLogger(__name__)
++
++
+ def load_ranker(model_path: str = "data/models/ranker.json") -> Dict[str, Any]:
+     """
+     Loads the Phase 4 ranker model.
+@@ -47,7 +51,8 @@ def load_intervention_model(model_path: str = "data/models/intervention_model.pk
+         import pickle
+         with open(model_path, "rb") as f:
+             return pickle.load(f)
+-    except Exception:
++    except Exception as exc:
++        log.warning("Could not load intervention model %s: %s", model_path, exc)
+         return None
+ 
+ 
+@@ -190,8 +195,8 @@ def search_fix(
+                     key=lambda x: x.get("predicted_fix_probability", 0.0),
+                     reverse=True,
+                 )
+-        except Exception:
+-            pass
++        except Exception as exc:
++            log.warning("Intervention model scoring failed; keeping default order: %s", exc)
+ 
+     trace_id = trace.get("trace_id")
+     trace_dir = os.path.join(traces_dir, str(trace_id))
+diff --git a/advanced/evaluate_persistent.py b/advanced/evaluate_persistent.py
+index 6786193..4d3b704 100644
+--- a/advanced/evaluate_persistent.py
++++ b/advanced/evaluate_persistent.py
+@@ -39,6 +39,12 @@ DEFECTS = [
+      "description": "select_cheapest_flight has a logic bug: it reads the unfiltered flight list and picks the most expensive one."},
+     {"defect": "hotel_filter_inverted", "root_cause_step_id": 7,
+      "description": "filter_hotels_by_checkin has an inverted comparison and keeps early check-ins."},
++    {"defect": "search_swaps_route", "root_cause_step_id": 3,
++     "description": "search_flights passes origin and destination the wrong way round."},
++    {"defect": "hotel_search_stale_date", "root_cause_step_id": 6,
++     "description": "search_hotels queries the day before the trip."},
++    {"defect": "budget_filter_inverted", "root_cause_step_id": 4,
++     "description": "filter_flights_by_budget keeps flights at or above the budget."},
+ ]
+ 
+ 
+@@ -60,16 +66,22 @@ def generate():
+     rng = random.Random(SEED)
+     for spec in DEFECTS:
+         for _ in range(PER_DEFECT):
+-            task = _task(rng)
+-            recorder = TraceRecorder(task=task, base_dir=BASE)
+-            recorder.trace["ground_truth"] = {
+-                "failure_type": spec["defect"],
+-                "root_cause_step_id": spec["root_cause_step_id"],
+-                "notes": spec["description"],
+-            }
+-            trace = TravelAgent(task=task, recorder=recorder, defects=[spec["defect"]]).run()
+-            if trace["status"] != "failed":
+-                raise SystemExit(f"Defect {spec['defect']} did not cause a failure: {trace['trace_id']}")
++            # A defect only counts if it really breaks the run for this task, so
++            # resample the task until it does (e.g. a budget no flight exceeds).
++            for _attempt in range(20):
++                task = _task(rng)
++                recorder = TraceRecorder(task=task, base_dir=BASE)
++                recorder.trace["ground_truth"] = {
++                    "failure_type": spec["defect"],
++                    "root_cause_step_id": spec["root_cause_step_id"],
++                    "notes": spec["description"],
++                }
++                trace = TravelAgent(task=task, recorder=recorder, defects=[spec["defect"]]).run()
++                if trace["status"] == "failed":
++                    break
++                shutil.rmtree(os.path.join(BASE, trace["trace_id"]), ignore_errors=True)
++            else:
++                raise SystemExit(f"Defect {spec['defect']} never caused a failure in 20 tries")
+ 
+ 
+ def main():
+@@ -108,6 +120,21 @@ def main():
+     print(f"Fixed on first attempt: {first}/{len(reports)}")
+     print(f"Fixed by plain replay (replay_no_patch): {plain_replay_fixed}/{len(reports)}")
+     print(f"Average attempts: {avg_attempts:.2f}")
++
++    # Does ordering proposals by the intervention model actually save attempts?
++    ordered = [
++        search_fix(
++            trace=t,
++            traces_dir=BASE,
++            base_dir=os.path.join("data", "persistent_evaluation", "replays_ordered"),
++            max_attempts=20,
++            model_ordering=True,
++        )
++        for t in traces
++    ]
++    o_fixed = sum(1 for r in ordered if r.get("fixed"))
++    o_avg = sum(len(r["attempts"]) for r in ordered) / max(len(ordered), 1)
++    print(f"With model_ordering=True: fixed {o_fixed}/{len(ordered)}, average attempts {o_avg:.2f} (default {avg_attempts:.2f})")
+     print(f"Winning interventions: {winners}")
+ 
+     out = os.path.join("data", "persistent_evaluation")
+diff --git a/advanced/generate_massive_dataset.py b/advanced/generate_massive_dataset.py
+index 9e3ac34..73d9942 100644
+--- a/advanced/generate_massive_dataset.py
++++ b/advanced/generate_massive_dataset.py
+@@ -20,7 +20,7 @@ SEEN_SCENARIOS = [
+     {"name": "wrong_date", "fault_config": {"fault_type": "wrong_date", "root_cause_step_id": 3}, "expected_status": "failed"},
+     {"name": "wrong_destination", "fault_config": {"fault_type": "wrong_destination", "root_cause_step_id": 3}, "expected_status": "failed"},
+     {"name": "budget_violation", "fault_config": {"fault_type": "budget_violation", "root_cause_step_id": 5}, "expected_status": "failed"},
+-    {"name": "ignored_empty_result", "fault_config": {"fault_type": "ignored_empty_result", "root_cause_step_id": 5}, "expected_status": "failed"},
++    {"name": "ignored_empty_result", "fault_config": {"fault_type": "ignored_empty_result", "root_cause_step_id": 3}, "expected_status": "failed"},
+     {"name": "state_overwrite", "fault_config": {"fault_type": "state_overwrite", "root_cause_step_id": 9}, "expected_status": "failed"},
+     {"name": "hotel_checkin_violation", "fault_config": {"fault_type": "hotel_checkin_violation", "root_cause_step_id": 8}, "expected_status": "failed"},
+ ]
+diff --git a/advanced/rigorous_evaluation.py b/advanced/rigorous_evaluation.py
+index fb61987..ff96ec2 100644
+--- a/advanced/rigorous_evaluation.py
++++ b/advanced/rigorous_evaluation.py
+@@ -119,7 +119,7 @@ def main():
+ 
+     # Ablations, scored on every held-out split (not just one).
+     ablation = {"full_model": {k: v["top1"] for k, v in full.items()}}
+-    for feat in ("is_earliest_violation", "undeclared_state_write", "feeds_earliest_violation", "is_ancestor_of_earliest"):
++    for feat in ("undeclared_state_write", "feeds_earliest_violation", "is_ancestor_of_earliest", "has_search_input_mismatch"):
+         def run(feat=feat):
+             wa, ba = tr.train_ranker(train)
+             return {k: tr.evaluate_ranking(t, wa, ba)["top1"] for k, t in splits.items()}
+diff --git a/agent/agent.py b/agent/agent.py
+index d5c8e8a..f64231d 100644
+--- a/agent/agent.py
++++ b/agent/agent.py
+@@ -186,9 +186,13 @@ class TravelAgent:
+             flights = []
+         else:
+             constraints = state.get("constraints", {})
++            origin, destination = constraints.get("origin"), constraints.get("destination")
++            if "search_swaps_route" in self.defects:
++                # Bug: origin and destination are passed the wrong way round.
++                origin, destination = destination, origin
+             flights = search_flights(
+-                origin=constraints.get("origin"),
+-                destination=constraints.get("destination"),
++                origin=origin,
++                destination=destination,
+                 date=constraints.get("date"),
+             )
+         state["flights"] = flights
+@@ -198,7 +202,11 @@ class TravelAgent:
+         flights = state.get("flights", [])
+         constraints = state.get("constraints", {})
+         budget = constraints.get("flight_price_max", 0)
+-        filtered_flights = [f for f in flights if f.get("price", float("inf")) <= budget]
++        if "budget_filter_inverted" in self.defects:
++            # Bug: keeps flights at or above the budget instead of at or below.
++            filtered_flights = [f for f in flights if f.get("price", 0) >= budget]
++        else:
++            filtered_flights = [f for f in flights if f.get("price", float("inf")) <= budget]
+         state["filtered_flights"] = filtered_flights
+         return {"filtered_flights": filtered_flights}
+ 
+@@ -216,9 +224,14 @@ class TravelAgent:
+ 
+     def _search_hotels(self, state: Dict[str, Any]) -> Dict[str, Any]:
+         constraints = state.get("constraints", {})
++        checkin_date = constraints.get("date")
++        if "hotel_search_stale_date" in self.defects and checkin_date:
++            # Bug: searches hotels for the day before the trip.
++            from datetime import date as _d, timedelta as _td
++            checkin_date = (_d.fromisoformat(checkin_date) - _td(days=1)).isoformat()
+         hotels = search_hotels(
+             city=constraints.get("destination"),
+-            checkin_date=constraints.get("date"),
++            checkin_date=checkin_date,
+         )
+         state["hotels"] = hotels
+         return {"hotels": hotels}
+diff --git a/diagnosis/spec_engine.py b/diagnosis/spec_engine.py
+index 0b4ce35..643d9ff 100644
+--- a/diagnosis/spec_engine.py
++++ b/diagnosis/spec_engine.py
+@@ -138,6 +138,37 @@ def check_step_invariants(trace: Dict[str, Any]) -> List[Dict[str, Any]]:
+                     details="Flight search date does not match the user's requested date.",
+                 )
+ 
++            # Output checks: the search must return results that answer the task.
++            returned = step_output.get("flights")
++            if isinstance(returned, list):
++                if not returned:
++                    _add_violation(
++                        violations=violations,
++                        step_id=step_id,
++                        step_name=step_name,
++                        invariant="search_flights.returns_results",
++                        expected="at least one flight",
++                        observed=0,
++                        details="Flight search returned no results for the task.",
++                    )
++                for fl in returned:
++                    fl = _safe_dict(fl)
++                    if (
++                        fl.get("origin") != expected_origin
++                        or fl.get("destination") != expected_destination
++                        or fl.get("date") != expected_date
++                    ):
++                        _add_violation(
++                            violations=violations,
++                            step_id=step_id,
++                            step_name=step_name,
++                            invariant="search_flights.results_match_task",
++                            expected=f"{expected_origin}->{expected_destination} on {expected_date}",
++                            observed=f"{fl.get('origin')}->{fl.get('destination')} on {fl.get('date')}",
++                            details="A returned flight does not match the task's route or date.",
++                        )
++                        break
++
+         # --------------------------------------------------
+         # filter_flights_by_budget invariants
+         # --------------------------------------------------
+@@ -255,6 +286,22 @@ def check_step_invariants(trace: Dict[str, Any]) -> List[Dict[str, Any]]:
+                     details="Hotel search check-in date does not match the user's requested date.",
+                 )
+ 
++            returned_hotels = step_output.get("hotels")
++            if isinstance(returned_hotels, list):
++                for ht in returned_hotels:
++                    ht = _safe_dict(ht)
++                    if ht.get("city") != expected_destination or ht.get("checkin_date") != expected_date:
++                        _add_violation(
++                            violations=violations,
++                            step_id=step_id,
++                            step_name=step_name,
++                            invariant="search_hotels.results_match_task",
++                            expected=f"{expected_destination} on {expected_date}",
++                            observed=f"{ht.get('city')} on {ht.get('checkin_date')}",
++                            details="A returned hotel does not match the task's city or date.",
++                        )
++                        break
++
+         # --------------------------------------------------
+         # filter_hotels_by_checkin invariants
+         # --------------------------------------------------
+diff --git a/generate_dataset.py b/generate_dataset.py
+index a606a0d..a6e571c 100644
+--- a/generate_dataset.py
++++ b/generate_dataset.py
+@@ -42,7 +42,7 @@ SCENARIOS = [
+         "name": "ignored_empty_result",
+         "fault_config": {
+             "fault_type": "ignored_empty_result",
+-            "root_cause_step_id": 5,
++            "root_cause_step_id": 3,
+             "description": "Flight search returns empty results, but the agent continues with a hallucinated flight.",
+         },
+         "expected_status": "failed",
+diff --git a/generate_more_traces.py b/generate_more_traces.py
+index 604bc8b..31deeab 100644
+--- a/generate_more_traces.py
++++ b/generate_more_traces.py
+@@ -29,8 +29,8 @@ SCENARIOS = [
+     {"name": "budget_violation", "root": 5, "expected_status": "failed",
+      "fault_config": {"fault_type": "budget_violation", "root_cause_step_id": 5,
+                       "description": "Agent selects a flight above the user's budget."}},
+-    {"name": "ignored_empty_result", "root": 5, "expected_status": "failed",
+-     "fault_config": {"fault_type": "ignored_empty_result", "root_cause_step_id": 5,
++    {"name": "ignored_empty_result", "root": 3, "expected_status": "failed",
++     "fault_config": {"fault_type": "ignored_empty_result", "root_cause_step_id": 3,
+                       "description": "Flight search returns empty results, but the agent continues with a hallucinated flight."}},
+     {"name": "state_overwrite", "root": 9, "expected_status": "failed",
+      "fault_config": {"fault_type": "state_overwrite", "root_cause_step_id": 9,
+diff --git a/generate_training_dataset.py b/generate_training_dataset.py
+index db80bc3..4b0cff0 100644
+--- a/generate_training_dataset.py
++++ b/generate_training_dataset.py
+@@ -52,7 +52,7 @@ SCENARIOS = [
+         "name": "ignored_empty_result",
+         "fault_config": {
+             "fault_type": "ignored_empty_result",
+-            "root_cause_step_id": 5,
++            "root_cause_step_id": 3,
+             "description": "Flight search returns empty results, but the agent continues with a hallucinated flight.",
+         },
+         "expected_status": "failed",
+diff --git a/tests/fixtures/ranker.json b/tests/fixtures/ranker.json
+index 7a35b44..c7f669a 100644
+--- a/tests/fixtures/ranker.json
++++ b/tests/fixtures/ranker.json
+@@ -20,22 +20,22 @@
+     "undeclared_state_write"
+   ],
+   "weights": {
+-    "confidence": -13.347962106786126,
+-    "low_confidence": -0.08224642802079865,
+-    "latency_ms": 5.380412864911415,
+-    "output_empty": -0.31952575608446016,
+-    "state_changed_key_count": 1.1379943738260618,
+-    "is_earliest_violation": 9.53458199046604,
+-    "has_search_input_mismatch": 1.2340201747611648,
+-    "has_selected_flight_invalid": 3.198714858745938,
+-    "has_selected_hotel_invalid": 2.67290463109574,
+-    "has_booking_input_lost": 2.9726843584770326,
+-    "has_filter_violation": -0.2235792540203803,
+-    "final_violation_count": -0.38784057375389475,
+-    "feeds_earliest_violation": -0.11809875215690668,
+-    "is_ancestor_of_earliest": -0.4709867439292107,
+-    "ancestor_hops_norm": -0.528398610886141,
+-    "undeclared_state_write": 1.9279626492561452
++    "confidence": -13.788837883547966,
++    "low_confidence": -0.13685357516157298,
++    "latency_ms": 3.6308308068514905,
++    "output_empty": 0.5582649096171837,
++    "state_changed_key_count": 1.7403875955546226,
++    "is_earliest_violation": 9.388745404180963,
++    "has_search_input_mismatch": 0.8811524577860148,
++    "has_selected_flight_invalid": 2.7133796456289647,
++    "has_selected_hotel_invalid": 2.8429592764568112,
++    "has_booking_input_lost": 2.373865565469388,
++    "has_filter_violation": -0.2758190332733939,
++    "final_violation_count": -0.32845845288364733,
++    "feeds_earliest_violation": -0.17424578859241643,
++    "is_ancestor_of_earliest": -0.3065243382565375,
++    "ancestor_hops_norm": -0.35675069200900494,
++    "undeclared_state_write": 2.4163371065955572
+   },
+-  "bias": 5.10230315976994
++  "bias": 4.775412623589385
+ }
+\ No newline at end of file
+diff --git a/tests/test_label_free.py b/tests/test_label_free.py
+new file mode 100644
+index 0000000..789a663
+--- /dev/null
++++ b/tests/test_label_free.py
+@@ -0,0 +1,39 @@
++"""The counterfactual search must never use ground-truth labels."""
++import copy
++import os
++import re
++
++from advanced.counterfactual_search import search_fix
++
++
++def _outcome(report):
++    iv = (report.get("successful_attempt") or {}).get("intervention", {})
++    return report["fixed"], len(report["attempts"]), iv.get("intervention_type"), iv.get("target_step_name")
++
++
++def test_search_result_is_identical_without_ground_truth(make_trace, tmp_path):
++    trace, base = make_trace("budget_violation", root_cause_step_id=5)
++    with_gt = search_fix(trace, traces_dir=base, base_dir=str(tmp_path / "a"))
++
++    stripped = copy.deepcopy(trace)
++    stripped.pop("ground_truth", None)
++    without_gt = search_fix(stripped, traces_dir=base, base_dir=str(tmp_path / "b"))
++
++    assert _outcome(with_gt) == _outcome(without_gt)
++
++
++def test_search_path_never_reads_ground_truth():
++    """Static check on the label-free path. (Evaluation code and the dataset
++    builder read labels on purpose; the search and the features it scores with must not.)"""
++    import inspect
++
++    import ml.features as mlf
++
++    root = os.path.dirname(os.path.dirname(__file__))
++    sources = {
++        rel: open(os.path.join(root, rel), encoding="utf-8").read()
++        for rel in ("advanced/counterfactual_search.py", "advanced/interventions.py", "diagnosis/provenance.py")
++    }
++    sources["ml.features.build_step_features"] = inspect.getsource(mlf.build_step_features)
++    for name, text in sources.items():
++        assert not re.search(r"ground_truth|failure_type", text), name
+-- 
+2.43.0
+
