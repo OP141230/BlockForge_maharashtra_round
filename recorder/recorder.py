@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime
 from typing import Any, Dict, Optional
+import uuid
 
 
 class TraceRecorder:
@@ -9,7 +10,7 @@ class TraceRecorder:
     def __init__(self, task: Dict[str, Any], base_dir: str = "data/traces") -> None:
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        self.trace_id = f"trace_{timestamp}"
+        self.trace_id = f"trace_{timestamp}_{uuid.uuid4().hex[:8]}"
         self.trace_dir = os.path.join(base_dir, self.trace_id)
         self.checkpoint_dir = os.path.join(self.trace_dir, "checkpoints")
 

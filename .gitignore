@@ -1,1 +1,16 @@
-__pycache__/ *.pyc *.pyo *.pyd .Python *.egg-info/ .venv/ venv/ 
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Generated artifacts — regenerate with the README quickstart
+data/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+
+# Streamlit local secrets (theme config.toml IS committed)
+.streamlit/secrets.toml
