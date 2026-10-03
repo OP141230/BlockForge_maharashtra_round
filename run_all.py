@@ -26,10 +26,16 @@ STEPS = [
     "advanced/generate_unseen_dataset.py",
     "advanced/evaluate_unseen.py",
     "advanced/evaluate_persistent.py",
+    "advanced/generate_massive_dataset.py",
+    "advanced/rigorous_evaluation.py",
 ]
 
 
 def main() -> int:
+    # Start from a clean data/ so results never depend on how many times the
+    # pipeline was run before (traces accumulate otherwise).
+    import shutil
+    shutil.rmtree(os.path.join(ROOT, "data"), ignore_errors=True)
     steps = [[sys.executable, s] for s in STEPS]
     if "--tests" in sys.argv:
         steps.append([sys.executable, "-m", "pytest", "-q"])

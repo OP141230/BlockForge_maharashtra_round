@@ -779,28 +779,28 @@ def render_evaluation_studio():
         st.markdown("<h3 style='font-family:monospace; color:#22d3ee; margin-top:30px;'>Model Rigor & Baselines</h3>", unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns(3)
-        auc = rig.get("full_model", {}).get("fail_detection_auc", 0)
-        c1.metric("Fail Detection AUC", f"{auc:.3f}")
-        
-        baselines = rig.get("baselines", {})
-        c2.metric("Baseline: Random Step", f"{baselines.get('random_step', 0)*100:.1f}%")
-        c3.metric("Baseline: Always Last", f"{baselines.get('always_last_step', 0)*100:.1f}%")
-        
+        fd = rig.get("fail_detection", {}).get("unseen_task", {})
+        auc = fd.get("auc")
+        c1.metric(f"Fail Detection AUC (unseen task, n={fd.get('n', 0)})",
+                  "n/a" if auc is None else f"{auc:.3f}")
+
+        bl = rig.get("baselines", {}).get("unseen_task", {})
+        c2.metric("Baseline: Random Step", f"{bl.get('random_step', 0)*100:.1f}%")
+        c3.metric("Baseline: Always Last", f"{bl.get('always_last_step', 0)*100:.1f}%")
+
         st.markdown("---")
-        
-        # Learning Curve Chart
+
         lc = rig.get("learning_curve", [])
         if lc:
-            df_lc = pd.DataFrame(lc)
-            st.subheader("Learning Curve (Top-1 Accuracy vs Dataset Size)")
-            st.line_chart(df_lc.set_index("train_runs")["top1"])
-            
-        # Ablation Chart
+            df_lc = pd.DataFrame(lc).set_index("train_runs")
+            st.subheader("Learning Curve (Top-1 vs training traces)")
+            st.line_chart(df_lc)
+
         abl = rig.get("ablation", {})
         if abl:
-            df_abl = pd.DataFrame(list(abl.items()), columns=["Configuration", "Top-1"])
-            st.subheader("Ablation Study (Unseen Fault Generalization)")
-            st.bar_chart(df_abl.set_index("Configuration")["Top-1"])
+            df_abl = pd.DataFrame(abl).T
+            st.subheader("Ablation (Top-1 per held-out split)")
+            st.bar_chart(df_abl)
 
 def render_diff_lab(trace, replay_report):
     """Renders the side-by-side state diff when a replay is executed."""

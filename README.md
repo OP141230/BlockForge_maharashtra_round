@@ -78,8 +78,8 @@ python advanced/evaluate_unseen.py      # zero-shot eval, 4 unseen fault familie
 python advanced/evaluate_persistent.py  # persistent-defect benchmark (replay alone cannot fix these)
 
 # Rigorous ML Evaluation (Massive Scale)
-python advanced/generate_massive_dataset.py  # 1500+ traces across Seen/Unseen Tasks & Faults
-python advanced/rigorous_evaluation.py      # Baselines, AUC, Learning Curves, Ablations
+python advanced/generate_massive_dataset.py  # ~590 labelled traces across seen/unseen tasks and faults
+python advanced/rigorous_evaluation.py      # baselines, AUC, learning curve, ablations
 
 python generate_more_traces.py 3        # optional: bulk traces for poking at the UI
 streamlit run ui/animated_app.py
@@ -165,12 +165,11 @@ over inputs, outputs and final state. The Replay Diff Lab tab renders the
 result: resolved violations struck through, replay economics, intervention
 details.
 
-**Massive Dataset & Rigorous Evaluation.** To prove generalization beyond a small 
-curated set, a generator produces 1,500+ traces across multiple dynamic city routes, 
-splitting them into strict seen_train, seen_test, unseen_fault_test, and 
-unseen_task_test buckets. A dedicated evaluation script trains the ranker on 
-subsets to plot a learning curve, drops features to measure ablation impact, and 
-calculates baselines (random step, always last step) and fail-detection AUC.
+**Held-out evaluation.** A generator builds ~590 labelled traces over several
+routes, split into seen_train, seen_test, unseen_fault_test and
+unseen_task_test (runs whose observed status disagrees with their label are
+discarded). The evaluation script reports baselines, a rank-based AUC, a
+learning curve and feature ablations, all computed from those traces.
 
 ## Fault taxonomy
 
@@ -221,19 +220,21 @@ trivial baseline: blame the earliest step the spec engine flagged.
 
 | Set | n | Ranker top-1 | Baseline top-1 |
 |---|---|---|---|
-| Held-out test split (seen families) | 24 | 1.00 | 1.00 |
-| Unseen families (zero-shot) | 20 | 0.75 | 0.75 |
+| Held-out test split (seen families) | 24 | 0.83 (top-3 1.00) | not measured |
+| Unseen families (zero-shot) | 20 | 0.55 | 0.75 |
 | Persistent defects | 10 | 1.00 | 1.00 |
 
-The ranker matches the baseline everywhere. Its feature set includes the
-spec engine's earliest-violation flag, so on this agent the spec engine does
-the localizing and the learned weights add nothing measurable. On the unseen
+On unseen families the ranker is *worse* than the baseline of blaming the
+earliest spec violation (0.55 vs 0.75): the hand-set weights overfit the seen
+families, e.g. `hotel_wrong_date` drops to 0.20 against 1.00. On the unseen
 `budget_filter_disabled` family both score 0/5: the filter at step 4 is the
-root cause, but the violation first shows at step 5.
+root cause, but the violation first shows at step 5. The spec engine does most
+of the localizing on this agent; the learned weights do not yet add value.
 
 **Fixing.**
 
-- Fault-aware checkpointed replay: 6/6 known traces fixed.
+- Fault-aware checkpointed replay: 5/6 known traces fixed. It picks the patch from
+  the ground-truth label, so it demonstrates the machinery rather than diagnosis.
 - Generic counterfactual search, no fault labels: 6/6 known and 20/20 unseen
   injected-fault traces fixed. 20/20 are fixed on the first attempt, mostly by
   `replay_no_patch`, i.e. by turning the injection off (see above).
@@ -241,17 +242,31 @@ root cause, but the violation first shows at step 5.
   the first attempt, averaging 2.5 attempts, always via `disable_step_defect`
   at the correct step.
 
-**Intervention model.** Training accuracy is about 0.92-0.95 on the 60-72
+**Intervention model.** Training accuracy is about 0.92 on 60
 contrastive attempts; accuracy on held-out traces (grouped CV, whole traces
-left out) is about 0.81-0.87 against a 0.52 majority-class baseline. Written
+left out) is 0.81 +/- 0.19 against a 0.52 majority-class baseline. Written
 to `data/models/intervention_model_metrics.json`. It annotates proposals only.
 
-**Rigorous ML Metrics (from 1,500+ trace evaluation).**
+**Held-out evaluation** (`advanced/rigorous_evaluation.py`, 315 training traces;
+only traces whose observed status matches their label are kept). Top-1 on failed
+traces, same ranker, never trained on these splits:
 
-- Fail Detection AUC: Spec engine separates success from failure with an AUC of ~0.90+.
-- Baselines: The ranker crushes trivial baselines (Random Step: ~16%, Always Last Step: ~11%).
-- Learning Curve: Top-1 accuracy scales smoothly from 100 to 1500+ training runs, plateauing near 1.0 on seen faults.
-- Ablation Study: Dropping features like is_earliest_violation or violation_count measurably degrades zero-shot generalization on unseen faults, proving the feature set's necessity.
+| Split | Failed traces | Top-1 | Random | Always-first / last |
+|---|---|---|---|---|
+| seen faults, new runs | 90 | 0.96 | 0.09 | 0.00 / 0.00 |
+| unseen fault families | 60 | 0.68 | 0.09 | 0.00 / 0.00 |
+| unseen routes | 99 | 0.78 | 0.09 | 0.00 / 0.00 |
+
+- Fail-detection AUC (spec-engine violation count, rank-based): 1.00 on seen
+  runs, 0.98 on unseen routes. The unseen-fault split has no clean runs, so
+  its AUC is undefined.
+- Learning curve: flat from 30 to 315 training traces. The class-mean ranker
+  saturates immediately, so more data does not help it.
+- Ablations: removing `is_earliest_violation` hurts on every split (0.96 to
+  0.83, 0.68 to 0.50, 0.78 to 0.70). Removing `violation_count` *improves*
+  every split, so that feature is harmful. `has_error` has no effect.
+- Everything is synthetic: injected faults on one mock agent. These numbers
+  show the pipeline works, not that it transfers to real agents.
 
 ## UI
 
