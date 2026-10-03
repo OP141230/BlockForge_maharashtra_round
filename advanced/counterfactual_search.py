@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
@@ -25,6 +26,9 @@ def _safe_list(value: Any) -> List[Any]:
     return []
 
 
+log = logging.getLogger(__name__)
+
+
 def load_ranker(model_path: str = "data/models/ranker.json") -> Dict[str, Any]:
     """
     Loads the Phase 4 ranker model.
@@ -47,7 +51,8 @@ def load_intervention_model(model_path: str = "data/models/intervention_model.pk
         import pickle
         with open(model_path, "rb") as f:
             return pickle.load(f)
-    except Exception:
+    except Exception as exc:
+        log.warning("Could not load intervention model %s: %s", model_path, exc)
         return None
 
 
@@ -190,8 +195,8 @@ def search_fix(
                     key=lambda x: x.get("predicted_fix_probability", 0.0),
                     reverse=True,
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("Intervention model scoring failed; keeping default order: %s", exc)
 
     trace_id = trace.get("trace_id")
     trace_dir = os.path.join(traces_dir, str(trace_id))

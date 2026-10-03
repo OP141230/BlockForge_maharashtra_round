@@ -186,9 +186,13 @@ class TravelAgent:
             flights = []
         else:
             constraints = state.get("constraints", {})
+            origin, destination = constraints.get("origin"), constraints.get("destination")
+            if "search_swaps_route" in self.defects:
+                # Bug: origin and destination are passed the wrong way round.
+                origin, destination = destination, origin
             flights = search_flights(
-                origin=constraints.get("origin"),
-                destination=constraints.get("destination"),
+                origin=origin,
+                destination=destination,
                 date=constraints.get("date"),
             )
         state["flights"] = flights
@@ -198,7 +202,11 @@ class TravelAgent:
         flights = state.get("flights", [])
         constraints = state.get("constraints", {})
         budget = constraints.get("flight_price_max", 0)
-        filtered_flights = [f for f in flights if f.get("price", float("inf")) <= budget]
+        if "budget_filter_inverted" in self.defects:
+            # Bug: keeps flights at or above the budget instead of at or below.
+            filtered_flights = [f for f in flights if f.get("price", 0) >= budget]
+        else:
+            filtered_flights = [f for f in flights if f.get("price", float("inf")) <= budget]
         state["filtered_flights"] = filtered_flights
         return {"filtered_flights": filtered_flights}
 
@@ -216,9 +224,14 @@ class TravelAgent:
 
     def _search_hotels(self, state: Dict[str, Any]) -> Dict[str, Any]:
         constraints = state.get("constraints", {})
+        checkin_date = constraints.get("date")
+        if "hotel_search_stale_date" in self.defects and checkin_date:
+            # Bug: searches hotels for the day before the trip.
+            from datetime import date as _d, timedelta as _td
+            checkin_date = (_d.fromisoformat(checkin_date) - _td(days=1)).isoformat()
         hotels = search_hotels(
             city=constraints.get("destination"),
-            checkin_date=constraints.get("date"),
+            checkin_date=checkin_date,
         )
         state["hotels"] = hotels
         return {"hotels": hotels}

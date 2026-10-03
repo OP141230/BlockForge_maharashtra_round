@@ -39,6 +39,12 @@ DEFECTS = [
      "description": "select_cheapest_flight has a logic bug: it reads the unfiltered flight list and picks the most expensive one."},
     {"defect": "hotel_filter_inverted", "root_cause_step_id": 7,
      "description": "filter_hotels_by_checkin has an inverted comparison and keeps early check-ins."},
+    {"defect": "search_swaps_route", "root_cause_step_id": 3,
+     "description": "search_flights passes origin and destination the wrong way round."},
+    {"defect": "hotel_search_stale_date", "root_cause_step_id": 6,
+     "description": "search_hotels queries the day before the trip."},
+    {"defect": "budget_filter_inverted", "root_cause_step_id": 4,
+     "description": "filter_flights_by_budget keeps flights at or above the budget."},
 ]
 
 
@@ -60,16 +66,22 @@ def generate():
     rng = random.Random(SEED)
     for spec in DEFECTS:
         for _ in range(PER_DEFECT):
-            task = _task(rng)
-            recorder = TraceRecorder(task=task, base_dir=BASE)
-            recorder.trace["ground_truth"] = {
-                "failure_type": spec["defect"],
-                "root_cause_step_id": spec["root_cause_step_id"],
-                "notes": spec["description"],
-            }
-            trace = TravelAgent(task=task, recorder=recorder, defects=[spec["defect"]]).run()
-            if trace["status"] != "failed":
-                raise SystemExit(f"Defect {spec['defect']} did not cause a failure: {trace['trace_id']}")
+            # A defect only counts if it really breaks the run for this task, so
+            # resample the task until it does (e.g. a budget no flight exceeds).
+            for _attempt in range(20):
+                task = _task(rng)
+                recorder = TraceRecorder(task=task, base_dir=BASE)
+                recorder.trace["ground_truth"] = {
+                    "failure_type": spec["defect"],
+                    "root_cause_step_id": spec["root_cause_step_id"],
+                    "notes": spec["description"],
+                }
+                trace = TravelAgent(task=task, recorder=recorder, defects=[spec["defect"]]).run()
+                if trace["status"] == "failed":
+                    break
+                shutil.rmtree(os.path.join(BASE, trace["trace_id"]), ignore_errors=True)
+            else:
+                raise SystemExit(f"Defect {spec['defect']} never caused a failure in 20 tries")
 
 
 def main():
@@ -108,6 +120,21 @@ def main():
     print(f"Fixed on first attempt: {first}/{len(reports)}")
     print(f"Fixed by plain replay (replay_no_patch): {plain_replay_fixed}/{len(reports)}")
     print(f"Average attempts: {avg_attempts:.2f}")
+
+    # Does ordering proposals by the intervention model actually save attempts?
+    ordered = [
+        search_fix(
+            trace=t,
+            traces_dir=BASE,
+            base_dir=os.path.join("data", "persistent_evaluation", "replays_ordered"),
+            max_attempts=20,
+            model_ordering=True,
+        )
+        for t in traces
+    ]
+    o_fixed = sum(1 for r in ordered if r.get("fixed"))
+    o_avg = sum(len(r["attempts"]) for r in ordered) / max(len(ordered), 1)
+    print(f"With model_ordering=True: fixed {o_fixed}/{len(ordered)}, average attempts {o_avg:.2f} (default {avg_attempts:.2f})")
     print(f"Winning interventions: {winners}")
 
     out = os.path.join("data", "persistent_evaluation")

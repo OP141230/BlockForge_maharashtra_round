@@ -119,7 +119,7 @@ def main():
 
     # Ablations, scored on every held-out split (not just one).
     ablation = {"full_model": {k: v["top1"] for k, v in full.items()}}
-    for feat in ("is_earliest_violation", "undeclared_state_write", "feeds_earliest_violation", "is_ancestor_of_earliest"):
+    for feat in ("undeclared_state_write", "feeds_earliest_violation", "is_ancestor_of_earliest", "has_search_input_mismatch"):
         def run(feat=feat):
             wa, ba = tr.train_ranker(train)
             return {k: tr.evaluate_ranking(t, wa, ba)["top1"] for k, t in splits.items()}

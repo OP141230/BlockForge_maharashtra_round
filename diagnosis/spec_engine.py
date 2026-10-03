@@ -138,6 +138,37 @@ def check_step_invariants(trace: Dict[str, Any]) -> List[Dict[str, Any]]:
                     details="Flight search date does not match the user's requested date.",
                 )
 
+            # Output checks: the search must return results that answer the task.
+            returned = step_output.get("flights")
+            if isinstance(returned, list):
+                if not returned:
+                    _add_violation(
+                        violations=violations,
+                        step_id=step_id,
+                        step_name=step_name,
+                        invariant="search_flights.returns_results",
+                        expected="at least one flight",
+                        observed=0,
+                        details="Flight search returned no results for the task.",
+                    )
+                for fl in returned:
+                    fl = _safe_dict(fl)
+                    if (
+                        fl.get("origin") != expected_origin
+                        or fl.get("destination") != expected_destination
+                        or fl.get("date") != expected_date
+                    ):
+                        _add_violation(
+                            violations=violations,
+                            step_id=step_id,
+                            step_name=step_name,
+                            invariant="search_flights.results_match_task",
+                            expected=f"{expected_origin}->{expected_destination} on {expected_date}",
+                            observed=f"{fl.get('origin')}->{fl.get('destination')} on {fl.get('date')}",
+                            details="A returned flight does not match the task's route or date.",
+                        )
+                        break
+
         # --------------------------------------------------
         # filter_flights_by_budget invariants
         # --------------------------------------------------
@@ -254,6 +285,22 @@ def check_step_invariants(trace: Dict[str, Any]) -> List[Dict[str, Any]]:
                     observed=step_input.get("checkin_date"),
                     details="Hotel search check-in date does not match the user's requested date.",
                 )
+
+            returned_hotels = step_output.get("hotels")
+            if isinstance(returned_hotels, list):
+                for ht in returned_hotels:
+                    ht = _safe_dict(ht)
+                    if ht.get("city") != expected_destination or ht.get("checkin_date") != expected_date:
+                        _add_violation(
+                            violations=violations,
+                            step_id=step_id,
+                            step_name=step_name,
+                            invariant="search_hotels.results_match_task",
+                            expected=f"{expected_destination} on {expected_date}",
+                            observed=f"{ht.get('city')} on {ht.get('checkin_date')}",
+                            details="A returned hotel does not match the task's city or date.",
+                        )
+                        break
 
         # --------------------------------------------------
         # filter_hotels_by_checkin invariants

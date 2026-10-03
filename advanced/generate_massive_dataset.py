@@ -20,7 +20,7 @@ SEEN_SCENARIOS = [
     {"name": "wrong_date", "fault_config": {"fault_type": "wrong_date", "root_cause_step_id": 3}, "expected_status": "failed"},
     {"name": "wrong_destination", "fault_config": {"fault_type": "wrong_destination", "root_cause_step_id": 3}, "expected_status": "failed"},
     {"name": "budget_violation", "fault_config": {"fault_type": "budget_violation", "root_cause_step_id": 5}, "expected_status": "failed"},
-    {"name": "ignored_empty_result", "fault_config": {"fault_type": "ignored_empty_result", "root_cause_step_id": 5}, "expected_status": "failed"},
+    {"name": "ignored_empty_result", "fault_config": {"fault_type": "ignored_empty_result", "root_cause_step_id": 3}, "expected_status": "failed"},
     {"name": "state_overwrite", "fault_config": {"fault_type": "state_overwrite", "root_cause_step_id": 9}, "expected_status": "failed"},
     {"name": "hotel_checkin_violation", "fault_config": {"fault_type": "hotel_checkin_violation", "root_cause_step_id": 8}, "expected_status": "failed"},
 ]

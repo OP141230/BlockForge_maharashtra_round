@@ -157,8 +157,9 @@ violations removed/added) is stored with it.
 a contrastive dataset; a logistic regression over intervention type, target
 step and violation statistics is trained on it. It annotates each proposal
 with a predicted fix probability, shown in the replay card. Using it to order
-attempts is implemented (`model_ordering=True` in `search_fix`) but off by
-default, so the validated search order is unchanged.
+attempts is implemented (`model_ordering=True` in `search_fix`) and measured by
+`advanced/evaluate_persistent.py`; it gives no gain, so it is off by default.
+Model-loading and scoring failures are logged, not swallowed.
 
 **Trace comparison.** Two traces aligned by step name are diffed recursively
 over inputs, outputs and final state. The Replay Diff Lab tab renders the
@@ -204,6 +205,9 @@ replay and are recorded in `trace["defects"]`.
 |---|---|---|
 | select_reads_unfiltered_list | select_cheapest_flight | reads the unfiltered list, picks the most expensive flight |
 | hotel_filter_inverted | filter_hotels_by_checkin | inverted comparison keeps early check-ins |
+| search_swaps_route | search_flights | origin and destination passed the wrong way round |
+| hotel_search_stale_date | search_hotels | queries the day before the trip |
+| budget_filter_inverted | filter_flights_by_budget | keeps flights at or above the budget |
 
 Replaying these without a patch cannot work. The search must pick the right
 step and the right intervention (`disable_step_defect`, which re-executes with
@@ -220,34 +224,34 @@ trivial baseline: blame the earliest step the spec engine flagged.
 
 | Set | n | Ranker top-1 | Baseline top-1 |
 |---|---|---|---|
-| Held-out test split (seen families) | 24 | 0.83 (top-3 1.00) | not measured |
-| Unseen families (zero-shot) | 20 | 0.55 | 0.75 |
-| Persistent defects | 10 | 1.00 | 1.00 |
+| Seen families, new runs | 90 | 1.00 | 1.00 |
+| Unseen families | 60 | 0.75 | 0.75 |
+| Unseen routes | 99 | 0.86 | 0.86 |
+| Persistent defects (5 kinds) | 25 | 1.00 | 1.00 |
 
-On unseen families the ranker is *worse* than the baseline of blaming the
-earliest spec violation (0.55 vs 0.75): the hand-set weights overfit the seen
-families, e.g. `hotel_wrong_date` drops to 0.20 against 1.00. On the unseen
-`budget_filter_disabled` family both score 0/5: the filter at step 4 is the
-root cause, but the violation first shows at step 5. The spec engine does most
-of the localizing on this agent; the learned weights do not yet add value.
+The ranker ties the baseline on every set. The spec engine does the
+localizing on this agent; the learned weights add nothing measurable.
 
 **Fixing.**
 
-- Fault-aware checkpointed replay: 5/6 known traces fixed. It picks the patch from
-  the ground-truth label, so it demonstrates the machinery rather than diagnosis.
+- Fault-aware checkpointed replay: 6/6 known traces fixed. It picks the patch
+  from the ground-truth label, so it demonstrates the machinery, not diagnosis.
 - Generic counterfactual search, no fault labels: 6/6 known and 20/20 unseen
   injected-fault traces fixed. 20/20 are fixed on the first attempt, mostly by
   `replay_no_patch`, i.e. by turning the injection off (see above).
-- Persistent defects: plain replay fixes 0/10; the search fixes 10/10, never on
-  the first attempt, averaging 2.5 attempts, always via `disable_step_defect`
-  at the correct step.
+- Persistent defects (5 kinds, 25 traces): plain replay fixes 0/25; the search
+  fixes 25/25, never on the first attempt, averaging 2.8 attempts, always via
+  `disable_step_defect` at the correct step (5 of each kind).
+- Ordering attempts by the intervention model (`model_ordering=True`) is
+  measured in the same benchmark: it changes nothing (2.8 vs 2.8 attempts), so
+  it stays off.
 
 **Intervention model.** Training accuracy is about 0.92 on 60
 contrastive attempts; accuracy on held-out traces (grouped CV, whole traces
-left out) is 0.81 +/- 0.19 against a 0.52 majority-class baseline. Written
+left out) is 0.96 +/- 0.08 against a 0.57 majority-class baseline. Written
 to `data/models/intervention_model_metrics.json`. It annotates proposals only.
 
-**Ranker (phase 3).** The ranker is an L2-regularised, class-balanced logistic
+**Ranker.** The ranker is an L2-regularised, class-balanced logistic
 regression (scaler folded into plain weights and a fitted bias) over 14
 per-step features: spec-violation signals, plus causal features (data-flow
 distance to the earliest violation, and "changed state outside the step's
@@ -261,29 +265,37 @@ Held-out top-1 on failed traces (`advanced/rigorous_evaluation.py`, trained on
 |---|---|---|---|
 | seen faults, new runs | 90 | 1.00 | 1.00 |
 | unseen fault families | 60 | 0.75 | 0.75 |
-| unseen routes | 99 | 0.87 | 0.86 |
+| unseen routes | 99 | 0.86 | 0.86 |
 
 Stricter checks (`advanced/ranker_generalization.py`):
 
 | Protocol | Ranker | Baseline |
 |---|---|---|
-| leave one fault family out (10 families) | 0.81 | 0.94 |
-| leave one root step out | 0.69 | 0.94 |
+| leave one fault family out (10 families) | 0.83 | 0.94 |
+| leave one root step out | 0.83 | 0.94 |
 
-The ranker matches the baseline on the standard splits and is **worse** under
-the stricter ones. It does not beat "blame the earliest violation". Two reasons:
+The ranker ties the baseline on the standard splits and is **worse** under the
+stricter ones, so it does not beat "blame the earliest violation". The failures
+are concentrated in the `budget_violation` / `budget_filter_disabled` pair: they
+show the same symptom (an over-budget flight at step 5) but have different
+labelled roots (step 5 vs step 4), and only a hidden injected flag tells them
+apart. Hold either one out and the model learns the other's mapping. The
+same pair is why `unseen_fault` is stuck at 0.75.
 
-- `budget_filter_disabled` (root = step 4) is injected as a hidden flag that
-  makes the *selector* misbehave, so its observable symptoms are the same as
-  `budget_violation` (root = step 5). Only the undeclared state write tells them
-  apart.
-- Labelling is inconsistent: `budget_filter_disabled` is labelled at its
-  injection site, while `ignored_empty_result` is labelled at the step that
-  mishandled the empty result, not where its flag is injected (step 3). A model
-  cannot learn one rule that fits both.
+Notes on how this was reached, so the numbers are not over-read:
 
-The causal features were designed after seeing these failures, so
-`budget_filter_disabled` is no longer a clean zero-shot test.
+- `ignored_empty_result` is labelled at step 3, its injection site (the replay
+  engine already restarted it there), matching the other families. It was
+  step 5 before, which made the labelling inconsistent. This was a labelling
+  decision made after seeing the results.
+- The spec engine now also checks search *outputs* (results non-empty, flights
+  and hotels match the task). Without it, wrong results from a buggy search were
+  not flagged until a later step.
+- Dropping `is_earliest_violation` scores 1.00 / 0.96 on the unseen splits but
+  0.20 on persistent defects and worse leave-one-family-out, so it was kept.
+  That choice used held-out data, so treat the unseen scores as optimistic.
+- The causal features were designed after seeing `budget_filter_disabled` fail,
+  so it is not a clean zero-shot family any more.
 
 Other numbers from the evaluation script:
 
@@ -294,6 +306,10 @@ Other numbers from the evaluation script:
 - Ablations: removing any single feature changes held-out top-1 by at most
   0.01, so no feature is individually critical. The spec engine carries the signal.
 - Everything is synthetic: injected faults on one mock agent.
+
+Label-free diagnosis is tested, not just claimed: `tests/test_label_free.py`
+checks that the search returns the same result with `ground_truth` removed from
+the trace and that the search path never references labels.
 
 ## UI
 
