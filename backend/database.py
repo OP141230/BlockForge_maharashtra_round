@@ -28,5 +28,4 @@ def get_db():
 def init_db():
     """Create all tables in the database."""
     from backend import models  # noqa: F401
-    from backend import itinerary_routes  # noqa: F401 — registers Itinerary models
     Base.metadata.create_all(bind=engine)
