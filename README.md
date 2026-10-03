@@ -137,7 +137,7 @@ DAG over steps, state keys and terminal violations. A backward slice from a
 terminal violation yields the causal path the UI draws as the corrupted data
 flow.
 
-**Ranker.** 22 hand-built features per step (invariant violations, earliest
+**Ranker.** 14 hand-built features per step (invariant violations, earliest
 violation flag, output emptiness, state-change count, selection validity,
 position, step-type one-hots, ...). The model is a linear feature-weight
 scorer trained on 770 step-level examples, 60 positive. It was kept linear on
@@ -247,26 +247,53 @@ contrastive attempts; accuracy on held-out traces (grouped CV, whole traces
 left out) is 0.81 +/- 0.19 against a 0.52 majority-class baseline. Written
 to `data/models/intervention_model_metrics.json`. It annotates proposals only.
 
-**Held-out evaluation** (`advanced/rigorous_evaluation.py`, 315 training traces;
-only traces whose observed status matches their label are kept). Top-1 on failed
-traces, same ranker, never trained on these splits:
+**Ranker (phase 3).** The ranker is an L2-regularised, class-balanced logistic
+regression (scaler folded into plain weights and a fitted bias) over 14
+per-step features: spec-violation signals, plus causal features (data-flow
+distance to the earliest violation, and "changed state outside the step's
+declared write set"). Position and step-type features were dropped because
+they contributed nothing measurable.
 
-| Split | Failed traces | Top-1 | Random | Always-first / last |
-|---|---|---|---|---|
-| seen faults, new runs | 90 | 0.96 | 0.09 | 0.00 / 0.00 |
-| unseen fault families | 60 | 0.68 | 0.09 | 0.00 / 0.00 |
-| unseen routes | 99 | 0.78 | 0.09 | 0.00 / 0.00 |
+Held-out top-1 on failed traces (`advanced/rigorous_evaluation.py`, trained on
+315 traces), against the baseline "blame the earliest spec violation":
 
-- Fail-detection AUC (spec-engine violation count, rank-based): 1.00 on seen
-  runs, 0.98 on unseen routes. The unseen-fault split has no clean runs, so
-  its AUC is undefined.
-- Learning curve: flat from 30 to 315 training traces. The class-mean ranker
-  saturates immediately, so more data does not help it.
-- Ablations: removing `is_earliest_violation` hurts on every split (0.96 to
-  0.83, 0.68 to 0.50, 0.78 to 0.70). Removing `violation_count` *improves*
-  every split, so that feature is harmful. `has_error` has no effect.
-- Everything is synthetic: injected faults on one mock agent. These numbers
-  show the pipeline works, not that it transfers to real agents.
+| Split | Failed | Ranker | Baseline |
+|---|---|---|---|
+| seen faults, new runs | 90 | 1.00 | 1.00 |
+| unseen fault families | 60 | 0.75 | 0.75 |
+| unseen routes | 99 | 0.87 | 0.86 |
+
+Stricter checks (`advanced/ranker_generalization.py`):
+
+| Protocol | Ranker | Baseline |
+|---|---|---|
+| leave one fault family out (10 families) | 0.81 | 0.94 |
+| leave one root step out | 0.69 | 0.94 |
+
+The ranker matches the baseline on the standard splits and is **worse** under
+the stricter ones. It does not beat "blame the earliest violation". Two reasons:
+
+- `budget_filter_disabled` (root = step 4) is injected as a hidden flag that
+  makes the *selector* misbehave, so its observable symptoms are the same as
+  `budget_violation` (root = step 5). Only the undeclared state write tells them
+  apart.
+- Labelling is inconsistent: `budget_filter_disabled` is labelled at its
+  injection site, while `ignored_empty_result` is labelled at the step that
+  mishandled the empty result, not where its flag is injected (step 3). A model
+  cannot learn one rule that fits both.
+
+The causal features were designed after seeing these failures, so
+`budget_filter_disabled` is no longer a clean zero-shot test.
+
+Other numbers from the evaluation script:
+
+- Fail-detection AUC (spec-engine violation count, rank-based): about 1.00 on
+  seen runs, 0.98 on unseen routes. Undefined on the unseen-fault split, which
+  has no clean runs.
+- Learning curve: flat from 30 to 315 training traces.
+- Ablations: removing any single feature changes held-out top-1 by at most
+  0.01, so no feature is individually critical. The spec engine carries the signal.
+- Everything is synthetic: injected faults on one mock agent.
 
 ## UI
 
@@ -304,5 +331,5 @@ Ablation Study, Fail Detection AUC, and baseline comparisons.
 - The generic intervention search is heuristic. It fixes 100% of the curated
   benchmark traces, but there is no guarantee on arbitrary traces; on a
   bulk-generated set with label noise it reached 90/100.
-- The ranker is deliberately small (linear, 770 samples). The contribution of
+- The ranker is deliberately small (linear, a few hundred traces). The contribution of
   this project is the record-diagnose-prove pipeline, not model scale.

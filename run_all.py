@@ -28,6 +28,7 @@ STEPS = [
     "advanced/evaluate_persistent.py",
     "advanced/generate_massive_dataset.py",
     "advanced/rigorous_evaluation.py",
+    "advanced/ranker_generalization.py",
 ]
 
 

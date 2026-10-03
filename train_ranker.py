@@ -7,33 +7,30 @@ from diagnosis.spec_engine import evaluate_trace
 from ml.features import FEATURE_NAMES, build_dataset, build_step_features, _safe_dict
 
 
-def train_feature_weight_model(X: List[Dict[str, float]], y: List[int]):
+def train_feature_weight_model(X: List[Dict[str, float]], y: List[int], c: float = 1.0):
+    """Fits an L2-regularised, class-balanced logistic regression on step features.
+
+    Features are standardised for fitting, then the scaler is folded back into the
+    weights so the saved model stays a plain `bias + sum(w_i * x_i)` scorer that
+    every downstream consumer already understands.
     """
-    Trains a lightweight linear feature-weight ranker.
-    """
-    positives = [features for features, label in zip(X, y) if label == 1]
-    negatives = [features for features, label in zip(X, y) if label == 0]
+    import numpy as np
+    from sklearn.linear_model import LogisticRegression
 
-    weights: Dict[str, float] = {}
+    M = np.array([[float(f.get(n, 0.0)) for n in FEATURE_NAMES] for f in X])
+    t = np.array(y)
+    if len(set(y)) < 2:
+        return {n: 0.0 for n in FEATURE_NAMES}, 0.0
 
-    for feature_name in FEATURE_NAMES:
-        positive_mean = 0.0
-        negative_mean = 0.0
+    mu = M.mean(axis=0)
+    sd = M.std(axis=0)
+    sd[sd == 0] = 1.0
+    clf = LogisticRegression(C=c, class_weight="balanced", max_iter=2000, solver="lbfgs")
+    clf.fit((M - mu) / sd, t)
 
-        if positives:
-            positive_mean = sum(
-                float(features.get(feature_name, 0.0)) for features in positives
-            ) / len(positives)
-
-        if negatives:
-            negative_mean = sum(
-                float(features.get(feature_name, 0.0)) for features in negatives
-            ) / len(negatives)
-
-        weights[feature_name] = positive_mean - negative_mean
-
-    bias = 0.0
-    return weights, bias
+    raw_w = clf.coef_[0] / sd
+    raw_b = float(clf.intercept_[0] - np.sum(clf.coef_[0] * mu / sd))
+    return {n: float(w) for n, w in zip(FEATURE_NAMES, raw_w)}, raw_b
 
 
 def score_features(weights: Dict[str, float], bias: float, features: Dict[str, float]) -> float:
@@ -143,8 +140,8 @@ def main():
     weights, bias = train_ranker(train_traces)
 
     model = {
-        "model_type": "feature_weight_ranker",
-        "description": "Lightweight learned ranker for Black Box failure localization.",
+        "model_type": "logistic_regression_ranker",
+        "description": "L2 logistic regression over per-step features, scaler folded into weights.",
         "feature_names": FEATURE_NAMES,
         "weights": weights,
         "bias": bias,

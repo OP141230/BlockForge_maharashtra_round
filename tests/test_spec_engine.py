@@ -24,3 +24,22 @@ def test_budget_violation_is_flagged_at_selection_step(make_trace):
 def test_state_overwrite_is_flagged_at_create_booking(make_trace):
     trace, _ = make_trace("state_overwrite", root_cause_step_id=9)
     assert evaluate_trace(trace)["earliest_step_signal"] == 9
+
+
+def test_ranker_is_trained_not_class_mean(make_trace):
+    """The ranker must have a fitted (non-zero) bias and use the causal features."""
+    import train_ranker as tr
+    from ml.features import FEATURE_NAMES
+
+    traces = []
+    for ft, rc in (("wrong_date", 3), ("budget_violation", 5), ("state_overwrite", 9)):
+        trace, _ = make_trace(ft, rc)
+        traces.append(trace)
+    clean, _ = make_trace()
+    traces.append(clean)
+
+    weights, bias = tr.train_ranker(traces)
+    assert bias != 0.0
+    assert set(weights) == set(FEATURE_NAMES)
+    assert {"feeds_earliest_violation", "undeclared_state_write"} <= set(FEATURE_NAMES)
+    assert any(abs(w) > 0 for w in weights.values())
