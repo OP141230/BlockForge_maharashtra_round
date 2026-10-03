@@ -1,86 +1,69 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-  GitCompare,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  ArrowRight,
-  Sparkles,
-  Layers,
-} from "lucide-react";
+import { GitCompare, AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react";
 import { compareRuns } from "@/lib/api";
 
 export default function ComparePage() {
-  const [targetRunId] = useState("run_travel_paris_fail");
-  const [baselineRunId] = useState("run_travel_paris_success");
   const [comparison, setComparison] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
-    compareRuns(targetRunId, baselineRunId)
-      .then((data) => {
-        setComparison(data);
-        setLoading(false);
-      })
-      .catch((e) => {
-        console.error(e);
-        setLoading(false);
-      });
-  }, [targetRunId, baselineRunId]);
+    compareRuns("run_travel_paris_fail", "run_travel_paris_success")
+      .then((d) => { setComparison(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
-      {/* Header */}
+    <div className="p-8 space-y-7 max-w-6xl mx-auto w-full">
       <div>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs uppercase font-mono tracking-wider text-primary font-bold px-2 py-0.5 rounded bg-blue-50 border border-blue-200">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
+            style={{ background: "#EEF2FF", color: "#3B82F6", border: "1px solid #C7D7FD" }}>
             Divergence Studio
           </span>
-          <span className="text-xs text-text-muted">● Causal State Alignment</span>
         </div>
-        <h1 className="text-3xl font-black text-text-primary tracking-tight">
-          Run Comparison & First Divergence Analysis
+        <h1 className="text-3xl font-black tracking-tight" style={{ color: "#1A2236" }}>
+          Run Comparison &amp; First Divergence Analysis
         </h1>
-        <p className="text-sm text-text-muted mt-1 max-w-2xl">
-          Side-by-side alignment of failed vs successful executions to pinpoint the exact step where behavior first diverged from nominal behavior.
+        <p className="text-sm mt-1" style={{ color: "#6B7A99" }}>
+          Side-by-side alignment of failed vs successful executions to pinpoint exact divergence.
         </p>
       </div>
 
-      {/* First Meaningful Divergence Spotlight */}
+      {/* First divergence spotlight */}
       {comparison?.first_meaningful_divergence && (
-        <div className="p-6 rounded-2xl bg-amber-500/10 border border-amber-300/80 glass-card flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
-            <AlertTriangle className="w-6 h-6" />
+        <div className="rounded-2xl p-6 flex items-start gap-5"
+          style={{ background: "linear-gradient(135deg,#FFFBEB,#FFF7E6)", border: "1px solid #FDE68A" }}>
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md"
+            style={{ background: "#F59E0B", boxShadow: "0 4px 14px rgba(245,158,11,0.35)" }}>
+            <AlertTriangle className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded bg-amber-200 text-amber-900">
-                First Meaningful Divergence Found
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                style={{ background: "#FDE68A", color: "#92400E" }}>
+                First Meaningful Divergence
               </span>
-              <span className="text-xs font-bold text-amber-800">
+              <span className="text-xs font-bold" style={{ color: "#B45309" }}>
                 Step {comparison.first_meaningful_divergence.step_index}: {comparison.first_meaningful_divergence.step_name}
               </span>
             </div>
-            <p className="text-xs text-text-primary font-bold mt-1">
-              Tool: <code className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-amber-800">{comparison.first_meaningful_divergence.tool_name}</code>
-            </p>
-            <p className="text-xs text-text-muted mt-1">
+            <p className="text-xs" style={{ color: "#78716C" }}>
               {comparison.first_meaningful_divergence.root_cause_diagnosis}
             </p>
-
-            {/* Side-by-side state diff */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 font-mono text-xs">
-              <div className="p-3 rounded-xl bg-white border border-rose-200">
-                <span className="text-[10px] uppercase font-bold text-rose-700">Failed Run Output:</span>
-                <pre className="mt-1 text-[11px] text-rose-800 overflow-x-auto">
+            <div className="grid grid-cols-2 gap-4 mt-4 font-mono text-xs">
+              <div className="p-3 rounded-xl"
+                style={{ background: "#FFFFFF", border: "1px solid #FCA5A5" }}>
+                <p className="text-[10px] font-bold uppercase mb-1" style={{ color: "#DC2626" }}>Failed Run Output</p>
+                <pre className="text-[11px] overflow-x-auto" style={{ color: "#EF4444" }}>
                   {JSON.stringify(comparison.first_meaningful_divergence.target_output, null, 2)}
                 </pre>
               </div>
-              <div className="p-3 rounded-xl bg-white border border-emerald-200">
-                <span className="text-[10px] uppercase font-bold text-emerald-700">Baseline Success Output:</span>
-                <pre className="mt-1 text-[11px] text-emerald-800 overflow-x-auto">
+              <div className="p-3 rounded-xl"
+                style={{ background: "#FFFFFF", border: "1px solid #86EFAC" }}>
+                <p className="text-[10px] font-bold uppercase mb-1" style={{ color: "#16A34A" }}>Baseline Success Output</p>
+                <pre className="text-[11px] overflow-x-auto" style={{ color: "#22C55E" }}>
                   {JSON.stringify(comparison.first_meaningful_divergence.baseline_output, null, 2)}
                 </pre>
               </div>
@@ -89,64 +72,60 @@ export default function ComparePage() {
         </div>
       )}
 
-      {/* Step Alignment Table */}
-      <div className="space-y-4">
-        <h3 className="text-base font-bold text-text-primary">Aligned Execution Pipeline Steps</h3>
-        <div className="rounded-2xl glass-card border border-panel-border overflow-hidden">
-          <table className="w-full text-left border-collapse text-xs">
+      {/* Aligned steps */}
+      <div>
+        <h3 className="text-base font-bold mb-4" style={{ color: "#1A2236" }}>Aligned Execution Pipeline</h3>
+        <div className="rounded-2xl overflow-hidden"
+          style={{ background: "#FFFFFF", border: "1px solid #DDE3EE", boxShadow: "0 2px 10px rgba(26,34,54,0.05)" }}>
+          <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-50/80 border-b border-panel-border text-text-muted font-semibold">
-                <th className="py-3 px-4">Index</th>
-                <th className="py-3 px-4">Step & Tool Name</th>
-                <th className="py-3 px-4">Failed Run Status</th>
-                <th className="py-3 px-4">Baseline Run Status</th>
-                <th className="py-3 px-4">State Alignment</th>
-                <th className="py-3 px-4 text-right">Target / Baseline Duration</th>
+              <tr style={{ background: "#F8FAFD", borderBottom: "1px solid #DDE3EE" }}>
+                {["#", "Step & Tool", "Failed Status", "Baseline Status", "Alignment", "Duration Δ"].map(h => (
+                  <th key={h} className="py-3 px-4 font-semibold" style={{ color: "#6B7A99" }}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 font-mono">
-              {comparison?.aligned_steps?.map((s: any) => (
-                <tr
-                  key={s.step_index}
-                  className={`transition-colors ${
-                    s.is_divergent ? "bg-amber-50/60 font-semibold" : "hover:bg-slate-50/50"
-                  }`}
-                >
-                  <td className="py-3.5 px-4">{s.step_index}</td>
-                  <td className="py-3.5 px-4 font-sans font-bold text-text-primary">
-                    {s.step_name} <span className="font-mono text-text-muted text-[11px]">({s.tool_name})</span>
+            <tbody>
+              {comparison?.aligned_steps?.map((s: any, i: number) => (
+                <tr key={i}
+                  className="transition-colors"
+                  style={{
+                    background: s.is_divergent ? "#FFFBEB" : "transparent",
+                    borderBottom: i < (comparison.aligned_steps.length-1) ? "1px solid #EEF2F7" : "none",
+                  }}>
+                  <td className="py-3.5 px-4 font-mono" style={{ color: "#9BA8BF" }}>{s.step_index}</td>
+                  <td className="py-3.5 px-4">
+                    <span className="font-semibold" style={{ color: "#1A2236" }}>{s.step_name}</span>
+                    <span className="font-mono ml-1 text-[11px]" style={{ color: "#9BA8BF" }}>({s.tool_name})</span>
                   </td>
                   <td className="py-3.5 px-4">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                        s.target_run_status === "SUCCESS"
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-rose-100 text-rose-700"
-                      }`}
-                    >
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
+                      style={s.target_run_status === "SUCCESS"
+                        ? { background: "#ECFDF5", color: "#16A34A" }
+                        : { background: "#FFF1F2", color: "#DC2626" }}>
                       {s.target_run_status}
                     </span>
                   </td>
                   <td className="py-3.5 px-4">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-emerald-100 text-emerald-700">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
+                      style={{ background: "#ECFDF5", color: "#16A34A" }}>
                       {s.baseline_run_status}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4 font-sans">
+                  <td className="py-3.5 px-4">
                     {s.is_divergent ? (
-                      <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-                        <AlertTriangle className="w-3 h-3" />
-                        Divergent
+                      <span className="flex items-center gap-1 text-xs font-bold"
+                        style={{ color: "#B45309" }}>
+                        <AlertTriangle className="w-3 h-3" /> Divergent
                       </span>
                     ) : (
-                      <span className="text-xs text-emerald-700 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" />
-                        Aligned
+                      <span className="flex items-center gap-1 text-xs" style={{ color: "#22C55E" }}>
+                        <CheckCircle2 className="w-3 h-3" /> Aligned
                       </span>
                     )}
                   </td>
-                  <td className="py-3.5 px-4 text-right text-text-muted">
-                    {s.target_duration_ms.toFixed(0)}ms / {s.baseline_duration_ms.toFixed(0)}ms
+                  <td className="py-3.5 px-4 font-mono" style={{ color: "#6B7A99" }}>
+                    {s.target_duration_ms?.toFixed(0)}ms / {s.baseline_duration_ms?.toFixed(0)}ms
                   </td>
                 </tr>
               ))}

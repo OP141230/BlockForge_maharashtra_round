@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { CheckCircle2, AlertTriangle, XCircle, Clock, ShieldCheck, ArrowRight } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Clock, ShieldCheck } from "lucide-react";
 
 interface StepItem {
   id: string;
@@ -15,78 +15,102 @@ interface StepItem {
   is_root_suspect?: boolean;
   is_downstream_impact?: boolean;
   side_effect_flag?: boolean;
-  input_data?: any;
-  output_data?: any;
 }
 
 interface TimelineProps {
   steps: StepItem[];
   selectedStepId: string | null;
-  onSelectStep: (stepId: string) => void;
+  onSelectStep: (id: string) => void;
 }
 
 export default function Timeline({ steps, selectedStepId, onSelectStep }: TimelineProps) {
   return (
-    <div className="w-full space-y-2">
+    <div className="space-y-1.5">
       {steps.map((step) => {
-        const isSuspect = step.is_root_suspect || (step.suspicion_score && step.suspicion_score > 75);
+        const isSuspect    = step.is_root_suspect || (step.suspicion_score != null && step.suspicion_score > 75);
         const isDownstream = step.is_downstream_impact || (step.status === "FAILED" && !isSuspect);
-        const isSelected = selectedStepId === step.id;
+        const isSelected   = selectedStepId === step.id;
+
+        let bg      = isSelected ? "#F0F4FA" : "#FFFFFF";
+        let border  = isSelected ? "#3B82F6" : "#DDE3EE";
+        if (isSuspect)    { bg = "#FFFBEB"; border = "#F59E0B"; }
+        if (isDownstream) { bg = "#FFF1F2"; border = "#FCA5A5"; }
 
         return (
           <div
             key={step.id}
             onClick={() => onSelectStep(step.id)}
-            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-              isSelected
-                ? "bg-blue-50/80 border-primary shadow-sm"
-                : isSuspect
-                ? "bg-amber-50/70 border-amber-300 hover:bg-amber-50"
-                : isDownstream
-                ? "bg-rose-50/70 border-rose-200 hover:bg-rose-50"
-                : "bg-white/80 border-slate-200/80 hover:bg-slate-50"
-            }`}
+            className="flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all"
+            style={{
+              background: bg,
+              border: `1px solid ${border}`,
+              boxShadow: isSuspect ? "0 0 0 2px rgba(245,158,11,0.15)" : "none",
+            }}
           >
             <div className="flex items-center gap-3">
-              <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 font-mono text-xs flex items-center justify-center font-bold">
+              {/* Step index bubble */}
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold font-mono shrink-0"
+                style={{
+                  background: isSuspect ? "#FEF3C7" : isDownstream ? "#FFF1F2" : "#F0F4FA",
+                  color: isSuspect ? "#B45309" : isDownstream ? "#DC2626" : "#6B7A99",
+                }}
+              >
                 {step.step_index}
-              </span>
+              </div>
 
               <div>
                 <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-xs text-text-primary">{step.step_name}</h4>
-                  <span className="text-[10px] font-mono text-text-muted px-1.5 py-0.2 rounded bg-slate-100">
+                  <span className="text-xs font-semibold" style={{ color: "#1A2236" }}>
+                    {step.step_name}
+                  </span>
+                  <span
+                    className="text-[10px] font-mono px-1.5 py-0.5 rounded"
+                    style={{ background: "#F0F4FA", color: "#6B7A99" }}
+                  >
                     {step.tool_name}
                   </span>
                   {step.side_effect_flag && (
-                    <span className="text-[9px] uppercase font-bold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
-                      Side Effect
+                    <span
+                      className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
+                      style={{ background: "#F3EEFF", color: "#7C5CFF" }}
+                    >
+                      side effect
                     </span>
                   )}
                 </div>
                 {step.error_text && (
-                  <p className="text-[11px] text-rose-600 font-mono mt-0.5">{step.error_text}</p>
+                  <p className="text-[11px] font-mono mt-0.5" style={{ color: "#EF4444" }}>
+                    {step.error_text}
+                  </p>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
               {isSuspect && (
-                <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-200/80 px-2 py-0.5 rounded-full">
-                  Suspect Score: {step.suspicion_score || 91.2}
+                <span
+                  className="text-[10px] font-bold font-mono px-2 py-0.5 rounded-full"
+                  style={{ background: "#FEF3C7", color: "#B45309" }}
+                >
+                  Score {step.suspicion_score?.toFixed(0) || 91}
                 </span>
               )}
-              <div className="flex items-center gap-1 text-[11px] text-text-muted font-mono">
+              <span className="flex items-center gap-1 text-[11px] font-mono" style={{ color: "#9BA8BF" }}>
                 <Clock className="w-3 h-3" />
-                <span>{step.duration_ms.toFixed(0)}ms</span>
-              </div>
+                {step.duration_ms?.toFixed(0)}ms
+              </span>
               <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
+                style={
                   step.status === "SUCCESS"
-                    ? "bg-emerald-100 text-emerald-700"
-                    : "bg-rose-100 text-rose-700"
-                }`}
+                    ? { background: "#ECFDF5", color: "#16A34A" }
+                    : { background: "#FFF1F2", color: "#DC2626" }
+                }
               >
+                {step.status === "SUCCESS"
+                  ? <CheckCircle2 className="w-3 h-3" />
+                  : <XCircle className="w-3 h-3" />}
                 {step.status}
               </span>
             </div>

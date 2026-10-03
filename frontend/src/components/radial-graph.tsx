@@ -1,19 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Bot,
-  Zap,
-  Clock,
-  ArrowRight,
-} from "lucide-react";
 
-interface NodeData {
+interface StepNode {
   id: string;
-  step_index?: number;
+  step_index: number;
   step_name: string;
   tool_name: string;
   status: string;
@@ -23,7 +14,6 @@ interface NodeData {
   is_downstream_impact?: boolean;
   side_effect_flag?: boolean;
   error_text?: string;
-  position?: { x: number; y: number };
 }
 
 interface RadialGraphProps {
@@ -31,187 +21,292 @@ interface RadialGraphProps {
   scenario: string;
   status: string;
   durationMs: number;
-  steps: NodeData[];
+  steps: StepNode[];
   selectedStepId: string | null;
-  onSelectStep: (stepId: string) => void;
+  onSelectStep: (id: string) => void;
+}
+
+/* ── Donut centre node ── */
+function DonutCenter({
+  cx, cy, agentName, status, total,
+}: {
+  cx: number; cy: number; agentName: string; status: string; total: number;
+}) {
+  const r = 46;
+  const strokeW = 8;
+  const segments = [
+    { color: "#3B82F6", pct: 0.30 },
+    { color: "#7C5CFF", pct: 0.25 },
+    { color: "#F59E0B", pct: 0.25 },
+    { color: "#22C55E", pct: 0.20 },
+  ];
+  const circ = 2 * Math.PI * r;
+  let offset = 0;
+
+  return (
+    <g>
+      {/* Outer glow ring */}
+      <circle cx={cx} cy={cy} r={r + 16} fill="rgba(59,130,246,0.06)" />
+      <circle cx={cx} cy={cy} r={r + 10} fill="rgba(59,130,246,0.08)" />
+      {/* White background disc */}
+      <circle cx={cx} cy={cy} r={r + strokeW / 2 + 2} fill="white" />
+
+      {/* Donut segments */}
+      {segments.map((seg, i) => {
+        const dash = seg.pct * circ;
+        const gap  = circ - dash;
+        const el = (
+          <circle
+            key={i}
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke={seg.color}
+            strokeWidth={strokeW}
+            strokeDasharray={`${dash} ${gap}`}
+            strokeDashoffset={-offset}
+            style={{ transform: `rotate(-90deg)`, transformOrigin: `${cx}px ${cy}px` }}
+          />
+        );
+        offset += dash;
+        return el;
+      })}
+
+      {/* Inner white hole */}
+      <circle cx={cx} cy={cy} r={r - strokeW / 2 - 1} fill="white" />
+
+      {/* Labels inside */}
+      <text x={cx} y={cy - 10} textAnchor="middle" fontSize="11" fontWeight="700"
+        fill="#1A2236" fontFamily="Inter,sans-serif">
+        {agentName.length > 14 ? agentName.slice(0, 14) + "…" : agentName}
+      </text>
+      <text x={cx} y={cy + 6} textAnchor="middle" fontSize="9" fill="#6B7A99"
+        fontFamily="Inter,sans-serif">
+        {total} nodes
+      </text>
+      <text x={cx} y={cy + 20} textAnchor="middle" fontSize="9" fontWeight="700"
+        fill={status === "FAILED" ? "#EF4444" : "#22C55E"}
+        fontFamily="Inter,sans-serif">
+        {status}
+      </text>
+    </g>
+  );
+}
+
+/* ── Individual step circle node ── */
+function StepCircle({
+  x, y, step, isSelected, onClick,
+}: {
+  x: number; y: number; step: StepNode;
+  isSelected: boolean; onClick: () => void;
+}) {
+  const isSuspect    = step.is_root_suspect || (step.suspicion_score != null && step.suspicion_score > 75);
+  const isDownstream = step.is_downstream_impact || (step.status === "FAILED" && !isSuspect);
+  const isOk         = !isSuspect && !isDownstream;
+
+  const R = isSuspect ? 24 : 18;
+
+  const fill    = isSuspect ? "#FEF3C7" : isDownstream ? "#FFF1F2" : "#FFFFFF";
+  const stroke  = isSuspect ? "#F59E0B" : isDownstream ? "#EF4444" : isSelected ? "#3B82F6" : "#DDE3EE";
+  const strokeW = isSuspect || isSelected ? 2.5 : 1.5;
+
+  /* Checkmark path (scaled to circle) */
+  const tick = `M ${x - 5} ${y} l 3.5 3.5 l 6 -6`;
+
+  return (
+    <g onClick={onClick} style={{ cursor: "pointer" }}>
+      {/* Amber glow ring for suspect */}
+      {isSuspect && (
+        <>
+          <circle cx={x} cy={y} r={R + 12} fill="rgba(245,158,11,0.12)" />
+          <circle cx={x} cy={y} r={R + 7}  fill="rgba(245,158,11,0.18)" />
+        </>
+      )}
+      {/* Red glow for downstream */}
+      {isDownstream && (
+        <circle cx={x} cy={y} r={R + 8} fill="rgba(239,68,68,0.10)" />
+      )}
+
+      <circle
+        cx={x} cy={y} r={R}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeW}
+        style={{ filter: isSuspect ? "drop-shadow(0 0 8px rgba(245,158,11,0.5))" : isDownstream ? "drop-shadow(0 0 6px rgba(239,68,68,0.35))" : "none" }}
+      />
+
+      {/* Icon inside node */}
+      {isOk && (
+        <path d={tick} fill="none" stroke="#22C55E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+      {isDownstream && (
+        <>
+          <line x1={x - 4} y1={y - 4} x2={x + 4} y2={y + 4} stroke="#EF4444" strokeWidth="2" strokeLinecap="round" />
+          <line x1={x + 4} y1={y - 4} x2={x - 4} y2={y + 4} stroke="#EF4444" strokeWidth="2" strokeLinecap="round" />
+        </>
+      )}
+      {isSuspect && (
+        <text x={x} y={y + 5} textAnchor="middle" fontSize="13" fill="#D97706" fontWeight="800">!</text>
+      )}
+
+      {/* Step label below */}
+      <text
+        x={x} y={y + R + 14}
+        textAnchor="middle"
+        fontSize="9"
+        fontWeight={isSuspect ? "700" : "500"}
+        fill={isSuspect ? "#B45309" : isDownstream ? "#DC2626" : "#6B7A99"}
+        fontFamily="Inter,sans-serif"
+      >
+        {step.step_name.length > 13 ? step.step_name.slice(0, 13) + "…" : step.step_name}
+      </text>
+
+      {/* Suspicion score chip */}
+      {isSuspect && step.suspicion_score != null && (
+        <>
+          <rect x={x - 22} y={y + R + 18} width={44} height={14} rx={7}
+            fill="#F59E0B" />
+          <text x={x} y={y + R + 28} textAnchor="middle" fontSize="8"
+            fontWeight="700" fill="white" fontFamily="Inter,sans-serif">
+            Score {Math.round(step.suspicion_score)}
+          </text>
+        </>
+      )}
+
+      {/* "N impact" label for downstream */}
+      {isDownstream && (
+        <>
+          <rect x={x - 18} y={y + R + 18} width={36} height={13} rx={6}
+            fill="#FFF1F2" stroke="#FCA5A5" strokeWidth="0.8" />
+          <text x={x} y={y + R + 27} textAnchor="middle" fontSize="7.5"
+            fontWeight="600" fill="#EF4444" fontFamily="Inter,sans-serif">
+            impact
+          </text>
+        </>
+      )}
+    </g>
+  );
 }
 
 export default function RadialGraph({
-  agentName,
-  scenario,
-  status,
-  durationMs,
-  steps,
-  selectedStepId,
-  onSelectStep,
+  agentName, scenario, status, durationMs, steps, selectedStepId, onSelectStep,
 }: RadialGraphProps) {
-  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const W = 880, H = 560;
+  const cx = W / 2, cy = H / 2 - 10;
+  const orbitR = 200;
+  const total  = steps.length;
 
-  const centerX = 440;
-  const centerY = 280;
-  const radius = 190;
-  const total = steps.length;
+  const angleOf = (i: number) =>
+    (2 * Math.PI * i) / Math.max(total, 1) - Math.PI / 2;
 
   return (
-    <div className="relative w-full h-[580px] rounded-2xl glass-panel overflow-hidden border border-panel-border/80 flex items-center justify-center select-none shadow-sm">
-      {/* Background Grid Pattern */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-40">
+    <div
+      className="relative w-full rounded-2xl overflow-hidden"
+      style={{
+        background: "#F0F4FA",
+        border: "1px solid #DDE3EE",
+        boxShadow: "0 2px 16px rgba(26,34,54,0.07)",
+        minHeight: 480,
+      }}
+    >
+      {/* Canvas label */}
+      <div
+        className="absolute top-4 left-4 z-10 flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-xl"
+        style={{ background: "rgba(255,255,255,0.85)", border: "1px solid #DDE3EE", color: "#6B7A99" }}
+      >
+        <span
+          className="w-2 h-2 rounded-full"
+          style={{ background: "#22C55E", boxShadow: "0 0 6px #22C55E" }}
+        />
+        Radial Graph Canvas
+        <span style={{ color: "#C8D0E0" }}>|</span>
+        <span className="truncate max-w-[200px]">{scenario}</span>
+      </div>
+
+      <svg
+        width="100%" viewBox={`0 0 ${W} ${H}`}
+        style={{ display: "block" }}
+      >
+        {/* ── Mesh background ── */}
         <defs>
-          <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
-            <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#CBD5E1" strokeWidth="0.75" />
+          <pattern id="mesh" width="80" height="80" patternUnits="userSpaceOnUse">
+            <path d="M40 0 L80 40 L40 80 L0 40 Z" fill="none" stroke="#C8D4E8" strokeWidth="0.5" opacity="0.5" />
+            <path d="M40 10 L70 40 L40 70 L10 40 Z" fill="none" stroke="#C8D4E8" strokeWidth="0.4" opacity="0.35" />
           </pattern>
+          <radialGradient id="centreGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stopColor="#3B82F6" stopOpacity="0.06" />
+            <stop offset="100%" stopColor="#7C5CFF" stopOpacity="0" />
+          </radialGradient>
         </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
-        {/* Concentric Orbit Rings */}
-        <circle cx={centerX} cy={centerY} r={radius} fill="none" stroke="#E2E8F0" strokeWidth="1.5" strokeDasharray="6 6" />
-        <circle cx={centerX} cy={centerY} r={radius + 45} fill="none" stroke="#F1F5F9" strokeWidth="1" />
-      </svg>
+        <rect width={W} height={H} fill="url(#mesh)" />
+        <circle cx={cx} cy={cy} r={220} fill="url(#centreGlow)" />
 
-      {/* SVG Connecting Edges */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-        {steps.map((step, idx) => {
-          const angle = (2 * Math.PI * idx) / Math.max(total, 1) - Math.PI / 2;
-          const nx = centerX + radius * Math.cos(angle);
-          const ny = centerY + radius * Math.sin(angle);
+        {/* Orbit ring (dashed circle) */}
+        <circle
+          cx={cx} cy={cy} r={orbitR}
+          fill="none"
+          stroke="#C8D4E8"
+          strokeWidth="1"
+          strokeDasharray="6 5"
+          opacity="0.7"
+        />
 
-          const isSuspect = step.is_root_suspect || (step.suspicion_score && step.suspicion_score > 75);
-          const isDownstream = step.is_downstream_impact || (step.status === "FAILED" && !isSuspect);
-          const isSelected = selectedStepId === step.id;
-
-          // Sequential connecting curve
-          const nextIdx = (idx + 1) % total;
-          const nextAngle = (2 * Math.PI * nextIdx) / Math.max(total, 1) - Math.PI / 2;
-          const nnx = centerX + radius * Math.cos(nextAngle);
-          const nny = centerY + radius * Math.sin(nextAngle);
+        {/* ── Spokes from centre to each node ── */}
+        {steps.map((step, i) => {
+          const angle = angleOf(i);
+          const nx = cx + orbitR * Math.cos(angle);
+          const ny = cy + orbitR * Math.sin(angle);
+          const isSuspect = step.is_root_suspect || (step.suspicion_score != null && step.suspicion_score > 75);
+          const isDown    = step.is_downstream_impact || (step.status === "FAILED" && !isSuspect);
 
           return (
-            <g key={`edges-${step.id}`}>
-              {/* Radial spoke from center */}
-              <line
-                x1={centerX}
-                y1={centerY}
-                x2={nx}
-                y2={ny}
-                stroke={isSuspect ? "#F59E0B" : isDownstream ? "#EF4444" : "#CBD5E1"}
-                strokeWidth={isSuspect ? 3 : isSelected ? 2.5 : 1.5}
-                strokeDasharray={isDownstream ? "4 4" : "none"}
-                className={isSuspect ? "animate-pulse" : ""}
-                opacity={isSelected ? 1 : 0.75}
-              />
-              {/* Orbit step-to-step connecting line */}
-              {idx < total - 1 && (
-                <line
-                  x1={nx}
-                  y1={ny}
-                  x2={nnx}
-                  y2={nny}
-                  stroke="#94A3B8"
-                  strokeWidth="1.5"
-                  strokeDasharray="4 4"
-                  opacity="0.6"
-                />
-              )}
-            </g>
+            <line
+              key={`spoke-${step.id}`}
+              x1={cx} y1={cy} x2={nx} y2={ny}
+              stroke={isSuspect ? "#F59E0B" : isDown ? "#EF4444" : "#C8D4E8"}
+              strokeWidth={isSuspect ? 2 : isDown ? 1.5 : 1}
+              strokeDasharray={isDown ? "4 3" : "none"}
+              opacity={isSuspect ? 1 : 0.7}
+            />
+          );
+        })}
+
+        {/* ── Sequential orbit arc connectors ── */}
+        {steps.map((step, i) => {
+          if (i === steps.length - 1) return null;
+          const a1 = angleOf(i);
+          const a2 = angleOf(i + 1);
+          const x1 = cx + orbitR * Math.cos(a1);
+          const y1 = cy + orbitR * Math.sin(a1);
+          const x2 = cx + orbitR * Math.cos(a2);
+          const y2 = cy + orbitR * Math.sin(a2);
+          return (
+            <line
+              key={`seq-${i}`}
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="#B8C4D8" strokeWidth="1" strokeDasharray="3 4" opacity="0.5"
+            />
+          );
+        })}
+
+        {/* ── Donut centre ── */}
+        <DonutCenter cx={cx} cy={cy} agentName={agentName} status={status} total={total} />
+
+        {/* ── Step nodes ── */}
+        {steps.map((step, i) => {
+          const angle = angleOf(i);
+          const nx = cx + orbitR * Math.cos(angle);
+          const ny = cy + orbitR * Math.sin(angle);
+          return (
+            <StepCircle
+              key={step.id}
+              x={nx} y={ny}
+              step={step}
+              isSelected={selectedStepId === step.id}
+              onClick={() => onSelectStep(step.id)}
+            />
           );
         })}
       </svg>
-
-      {/* Center Root Agent Node */}
-      <div
-        className="absolute z-20 flex flex-col items-center justify-center w-36 h-36 rounded-3xl glass-card border-2 border-primary/40 shadow-xl shadow-primary/10 transition-transform duration-300 hover:scale-105"
-        style={{ left: centerX - 72, top: centerY - 72 }}
-      >
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-primary to-intel text-white flex items-center justify-center shadow-md mb-1.5">
-          <Bot className="w-6 h-6" />
-        </div>
-        <span className="font-bold text-xs text-text-primary text-center px-2 line-clamp-1">
-          {agentName}
-        </span>
-        <span className="text-[10px] text-text-muted mt-0.5">{total} Nodes Recorded</span>
-        <span
-          className={`mt-1 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-            status === "SUCCESS"
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-rose-100 text-rose-700"
-          }`}
-        >
-          {status}
-        </span>
-      </div>
-
-      {/* Orbiting Step Nodes */}
-      {steps.map((step, idx) => {
-        const angle = (2 * Math.PI * idx) / Math.max(total, 1) - Math.PI / 2;
-        const nx = centerX + radius * Math.cos(angle);
-        const ny = centerY + radius * Math.sin(angle);
-
-        const isSuspect = step.is_root_suspect || (step.suspicion_score && step.suspicion_score > 75);
-        const isDownstream = step.is_downstream_impact || (step.status === "FAILED" && !isSuspect);
-        const isSelected = selectedStepId === step.id;
-
-        return (
-          <div
-            key={step.id}
-            onClick={() => onSelectStep(step.id)}
-            onMouseEnter={() => setHoveredNode(step.id)}
-            onMouseLeave={() => setHoveredNode(null)}
-            style={{ left: nx - 55, top: ny - 42 }}
-            className={`absolute z-20 w-28 p-2.5 rounded-2xl cursor-pointer transition-all duration-300 flex flex-col items-center text-center ${
-              isSuspect
-                ? "bg-amber-50/95 border-2 border-warning shadow-glow-amber pulse-suspect scale-105"
-                : isDownstream
-                ? "bg-rose-50/90 border-2 border-danger shadow-glow-red"
-                : isSelected
-                ? "bg-white border-2 border-primary shadow-lg scale-105"
-                : "bg-white/90 border border-slate-200 hover:border-slate-400 hover:shadow-md"
-            }`}
-          >
-            {/* Step Icon badge */}
-            <div className="mb-1">
-              {isSuspect ? (
-                <div className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center shadow">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                </div>
-              ) : step.status === "FAILED" ? (
-                <div className="w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow">
-                  <XCircle className="w-3.5 h-3.5" />
-                </div>
-              ) : (
-                <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                </div>
-              )}
-            </div>
-
-            <span className="font-bold text-[11px] text-text-primary leading-tight line-clamp-1">
-              {step.step_name}
-            </span>
-            <span className="text-[9px] text-text-muted font-mono mt-0.5">
-              {step.tool_name}
-            </span>
-
-            {/* Suspicion badge for suspect node */}
-            {isSuspect && (
-              <span className="mt-1 text-[9px] font-mono font-bold bg-amber-500 text-white px-1.5 py-0.2 rounded shadow-sm">
-                Score {step.suspicion_score || 91.2}
-              </span>
-            )}
-            {isDownstream && (
-              <span className="mt-1 text-[8px] font-mono text-rose-600 bg-rose-100 px-1 py-0.2 rounded">
-                Impacted
-              </span>
-            )}
-          </div>
-        );
-      })}
-
-      {/* Canvas Controls overlay */}
-      <div className="absolute top-4 left-4 z-20 flex items-center gap-2 text-xs font-medium text-text-muted bg-white/80 px-3 py-1.5 rounded-xl border border-panel-border shadow-sm">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span>Radial Graph Canvas</span>
-        <span className="text-slate-300">|</span>
-        <span className="text-[11px] font-mono">{scenario}</span>
-      </div>
     </div>
   );
 }

@@ -8,16 +8,18 @@ export const metadata: Metadata = {
   description: "Flight recorder plus investigation system for autonomous AI agents.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="flex h-screen overflow-hidden bg-bg text-text-primary antialiased">
+      <body
+        className="flex h-screen overflow-hidden antialiased"
+        style={{ background: "#EEF2F7", color: "#1A2236" }}
+      >
         <Sidebar />
-        <main className="flex-1 flex flex-col h-screen overflow-y-auto relative">
+        <main
+          className="flex-1 flex flex-col h-screen overflow-y-auto relative"
+          style={{ background: "#EEF2F7" }}
+        >
           {children}
         </main>
       </body>

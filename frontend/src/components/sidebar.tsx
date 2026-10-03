@@ -4,15 +4,14 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity,
+  LayoutDashboard,
   Layers,
   Search,
   RotateCcw,
   GitCompare,
   BarChart3,
   BookOpen,
-  Radio,
-  ShieldCheck,
+  Crosshair,
 } from "lucide-react";
 
 interface NavItem {
@@ -23,90 +22,101 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { name: "Overview", href: "/", icon: Activity },
-  { name: "Executions", href: "/executions", icon: Layers, badge: "3 Runs" },
-  { name: "Investigation", href: "/investigation", icon: Search, badge: "Live" },
-  { name: "Replay Lab", href: "/replay", icon: RotateCcw },
-  { name: "Comparison", href: "/compare", icon: GitCompare },
-  { name: "Evaluation", href: "/evaluation", icon: BarChart3, badge: "Benchmark" },
-  { name: "Patterns", href: "/patterns", icon: BookOpen },
+  { name: "Overview",      href: "/",            icon: LayoutDashboard },
+  { name: "Executions",    href: "/executions",  icon: Layers },
+  { name: "Investigation", href: "/investigation",icon: Search },
+  { name: "Replay Lab",    href: "/replay",      icon: RotateCcw },
+  { name: "Comparison",    href: "/compare",     icon: GitCompare },
+  { name: "Evaluation",    href: "/evaluation",  icon: BarChart3 },
+  { name: "Patterns",      href: "/patterns",    icon: BookOpen },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 h-screen bg-sidebar border-r border-panel-border flex flex-col justify-between shrink-0 shadow-sm z-30">
-      <div>
-        {/* SINGLE SIDEBAR BRANDING: Top-left corner logo icon + subtitle exactly once */}
-        <div className="p-5 border-b border-panel-border">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary via-intel to-primary flex items-center justify-center text-white shadow-md shadow-primary/20 group-hover:scale-105 transition-transform">
-              <Radio className="w-5 h-5 animate-pulse" />
+    <aside
+      className="w-56 h-screen flex flex-col shrink-0 z-30"
+      style={{ background: "#F0F4FA", borderRight: "1px solid #DDE3EE" }}
+    >
+      {/* ── Logo ── */}
+      <div className="px-5 pt-6 pb-5">
+        <Link href="/" className="flex items-center gap-3 group">
+          {/* Donut-style logo icon matching reference */}
+          <div className="relative w-10 h-10 shrink-0">
+            <svg viewBox="0 0 40 40" className="w-10 h-10 drop-shadow-md">
+              <circle cx="20" cy="20" r="18" fill="#EEF2F7" />
+              {/* Donut segments — blue/violet/amber like reference center node */}
+              <circle cx="20" cy="20" r="14" fill="none" stroke="#3B82F6" strokeWidth="5"
+                strokeDasharray="22 66" strokeDashoffset="0" />
+              <circle cx="20" cy="20" r="14" fill="none" stroke="#7C5CFF" strokeWidth="5"
+                strokeDasharray="18 70" strokeDashoffset="-22" />
+              <circle cx="20" cy="20" r="14" fill="none" stroke="#F59E0B" strokeWidth="5"
+                strokeDasharray="14 74" strokeDashoffset="-40" />
+              <circle cx="20" cy="20" r="14" fill="none" stroke="#22C55E" strokeWidth="5"
+                strokeDasharray="14 74" strokeDashoffset="-54" />
+              <circle cx="20" cy="20" r="8" fill="#F0F4FA" />
+            </svg>
+          </div>
+          <div>
+            <div className="font-black text-base tracking-tight" style={{ color: "#1A2236" }}>
+              BLACKBOX
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-black text-lg tracking-wider text-text-primary">BLACKBOX</span>
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-blue-50 text-primary border border-blue-200">v2.1</span>
-              </div>
-              <p className="text-xs text-text-muted font-medium">AI Agent Flight Recorder</p>
+            <div className="text-xs font-medium" style={{ color: "#6B7A99" }}>
+              AI Agent Flight Recorder
             </div>
-          </Link>
-        </div>
-
-        {/* Navigation items placed directly below branding */}
-        <nav className="p-3 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
-
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  isActive
-                    ? "bg-primary text-white shadow-sm shadow-primary/25"
-                    : "text-text-muted hover:text-text-primary hover:bg-slate-50"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-500"}`} />
-                  <span>{item.name}</span>
-                </div>
-                {item.badge && (
-                  <span
-                    className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                      isActive
-                        ? "bg-white/20 text-white"
-                        : "bg-slate-100 text-slate-600 border border-slate-200"
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
+          </div>
+        </Link>
       </div>
 
-      {/* Footer Info: Offline & Integrity notice */}
-      <div className="p-4 m-3 rounded-xl bg-slate-50 border border-slate-200/80 text-xs">
-        <div className="flex items-center gap-2 text-emerald-600 font-semibold mb-1">
-          <ShieldCheck className="w-4 h-4" />
-          <span>Offline Diagnostic Core</span>
+      {/* ── Nav items ── */}
+      <nav className="flex-1 px-3 space-y-0.5">
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const isActive =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
+
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                isActive
+                  ? "bg-white text-primary shadow-sm font-semibold"
+                  : "text-text-muted hover:bg-white/60 hover:text-text-primary"
+              }`}
+              style={
+                isActive
+                  ? { color: "#3B82F6", background: "#FFFFFF", boxShadow: "0 1px 6px rgba(26,34,54,0.07)" }
+                  : {}
+              }
+            >
+              <Icon
+                className="w-[18px] h-[18px] shrink-0"
+                style={{ color: isActive ? "#3B82F6" : "#6B7A99" }}
+              />
+              <span style={{ color: isActive ? "#3B82F6" : "#6B7A99" }}>{item.name}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* ── Bottom status ── */}
+      <div className="px-5 pb-6 pt-4 border-t" style={{ borderColor: "#DDE3EE" }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-sm font-semibold" style={{ color: "#22C55E" }}>
+              Operational
+            </span>
+          </div>
+          <Crosshair className="w-5 h-5" style={{ color: "#22C55E" }} />
         </div>
-        <p className="text-[11px] text-text-muted leading-relaxed">
-          100% deterministic local rules, statistical z-scores & ML ranker.
+        <p className="text-xs mt-1.5 leading-relaxed" style={{ color: "#9BA8BF" }}>
+          Offline · Deterministic Core
         </p>
-        <div className="mt-2 pt-2 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-          <span>Synthetic demo data</span>
-          <span className="text-emerald-500">● Live</span>
-        </div>
       </div>
     </aside>
   );
