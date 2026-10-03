@@ -7,7 +7,8 @@ from typing import Any, Dict, Optional
 class TraceRecorder:
 
     def __init__(self, task: Dict[str, Any], base_dir: str = "data/traces") -> None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         self.trace_id = f"trace_{timestamp}"
         self.trace_dir = os.path.join(base_dir, self.trace_id)
         self.checkpoint_dir = os.path.join(self.trace_dir, "checkpoints")
