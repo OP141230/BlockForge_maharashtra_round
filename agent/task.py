@@ -6,12 +6,12 @@ def sampleTask() -> Dict[str, Any]:
         "type": "travel_booking",
         "instruction": (
             "Book the cheapest flight from Mumbai to Delhi tomorrow "
-            "under 6000 and book a hotel with check-in after 14:00."
+            "under 6500 and book a hotel with check-in after 14:00."
         ),
         "origin": "Mumbai",
         "destination": "Delhi",
         "date": "2026-10-04",
         "current_date": "2026-10-03",
-        "budget": 6000,
+        "budget": 6500,
         "hotel_checkin_after": "14:00",
     }
