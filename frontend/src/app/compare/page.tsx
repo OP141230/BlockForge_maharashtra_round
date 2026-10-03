@@ -1,72 +1,73 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { GitCompare, AlertTriangle, CheckCircle2, ArrowRight } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { compareRuns } from "@/lib/api";
 
 export default function ComparePage() {
-  const [comparison, setComparison] = useState<any>(null);
-  const [loading, setLoading]       = useState(true);
+  const [cmp,     setCmp]     = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     compareRuns("run_travel_paris_fail", "run_travel_paris_success")
-      .then((d) => { setComparison(d); setLoading(false); })
+      .then((d) => { setCmp(d); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
+  const card: React.CSSProperties = {
+    background: "#FFFFFF", borderRadius: 16,
+    border: "1px solid #E4EAF4",
+    boxShadow: "0 2px 10px rgba(26,34,54,0.05)",
+  };
+
   return (
-    <div className="p-8 space-y-7 max-w-6xl mx-auto w-full">
+    <div className="p-7 space-y-6 max-w-6xl mx-auto w-full">
+      {/* Header */}
       <div>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
-            style={{ background: "#EEF2FF", color: "#3B82F6", border: "1px solid #C7D7FD" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", padding: "3px 10px", borderRadius: 999, background: "#EFF6FF", color: "#3B82F6", border: "1px solid #BFDBFE" }}>
             Divergence Studio
           </span>
+          <span style={{ fontSize: 11, color: "#9BA8BF" }}>● Causal State Alignment</span>
         </div>
-        <h1 className="text-3xl font-black tracking-tight" style={{ color: "#1A2236" }}>
+        <h1 style={{ fontSize: 24, fontWeight: 900, color: "#1A2236", letterSpacing: "-0.02em", margin: 0 }}>
           Run Comparison &amp; First Divergence Analysis
         </h1>
-        <p className="text-sm mt-1" style={{ color: "#6B7A99" }}>
+        <p style={{ fontSize: 13, color: "#6B7A99", marginTop: 5 }}>
           Side-by-side alignment of failed vs successful executions to pinpoint exact divergence.
         </p>
       </div>
 
-      {/* First divergence spotlight */}
-      {comparison?.first_meaningful_divergence && (
-        <div className="rounded-2xl p-6 flex items-start gap-5"
-          style={{ background: "linear-gradient(135deg,#FFFBEB,#FFF7E6)", border: "1px solid #FDE68A" }}>
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-md"
-            style={{ background: "#F59E0B", boxShadow: "0 4px 14px rgba(245,158,11,0.35)" }}>
-            <AlertTriangle className="w-6 h-6 text-white" />
+      {/* Divergence spotlight */}
+      {cmp?.first_meaningful_divergence && (
+        <div style={{ ...card, padding: "20px 24px", background: "linear-gradient(135deg,#FFFBEB,#FFF7E0)", border: "1px solid #FDE68A", display: "flex", alignItems: "flex-start", gap: 16 }}>
+          <div style={{ width: 46, height: 46, borderRadius: 14, flexShrink: 0, background: "#F59E0B", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px rgba(245,158,11,0.30)" }}>
+            <AlertTriangle style={{ width: 22, height: 22, color: "white" }} />
           </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                style={{ background: "#FDE68A", color: "#92400E" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+              <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 8px", borderRadius: 999, background: "#FDE68A", color: "#92400E" }}>
                 First Meaningful Divergence
               </span>
-              <span className="text-xs font-bold" style={{ color: "#B45309" }}>
-                Step {comparison.first_meaningful_divergence.step_index}: {comparison.first_meaningful_divergence.step_name}
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#B45309" }}>
+                Step {cmp.first_meaningful_divergence.step_index}: {cmp.first_meaningful_divergence.step_name}
               </span>
             </div>
-            <p className="text-xs" style={{ color: "#78716C" }}>
-              {comparison.first_meaningful_divergence.root_cause_diagnosis}
+            <p style={{ fontSize: 12, color: "#78716C", margin: "0 0 14px" }}>
+              {cmp.first_meaningful_divergence.root_cause_diagnosis}
             </p>
-            <div className="grid grid-cols-2 gap-4 mt-4 font-mono text-xs">
-              <div className="p-3 rounded-xl"
-                style={{ background: "#FFFFFF", border: "1px solid #FCA5A5" }}>
-                <p className="text-[10px] font-bold uppercase mb-1" style={{ color: "#DC2626" }}>Failed Run Output</p>
-                <pre className="text-[11px] overflow-x-auto" style={{ color: "#EF4444" }}>
-                  {JSON.stringify(comparison.first_meaningful_divergence.target_output, null, 2)}
-                </pre>
-              </div>
-              <div className="p-3 rounded-xl"
-                style={{ background: "#FFFFFF", border: "1px solid #86EFAC" }}>
-                <p className="text-[10px] font-bold uppercase mb-1" style={{ color: "#16A34A" }}>Baseline Success Output</p>
-                <pre className="text-[11px] overflow-x-auto" style={{ color: "#22C55E" }}>
-                  {JSON.stringify(comparison.first_meaningful_divergence.baseline_output, null, 2)}
-                </pre>
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {[
+                { label: "Failed Run Output", data: cmp.first_meaningful_divergence.target_output, border: "#FCA5A5", color: "#DC2626" },
+                { label: "Baseline Success Output", data: cmp.first_meaningful_divergence.baseline_output, border: "#86EFAC", color: "#16A34A" },
+              ].map(({ label, data, border, color }) => (
+                <div key={label} style={{ background: "#FFFFFF", border: `1px solid ${border}`, borderRadius: 10, padding: 12 }}>
+                  <p style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase", color, marginBottom: 5 }}>{label}</p>
+                  <pre style={{ margin: 0, fontSize: 10.5, color, fontFamily: "monospace", overflowX: "auto" }}>
+                    {JSON.stringify(data, null, 2)}
+                  </pre>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -74,57 +75,49 @@ export default function ComparePage() {
 
       {/* Aligned steps */}
       <div>
-        <h3 className="text-base font-bold mb-4" style={{ color: "#1A2236" }}>Aligned Execution Pipeline</h3>
-        <div className="rounded-2xl overflow-hidden"
-          style={{ background: "#FFFFFF", border: "1px solid #DDE3EE", boxShadow: "0 2px 10px rgba(26,34,54,0.05)" }}>
-          <table className="w-full text-left text-xs border-collapse">
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: "#1A2236", margin: "0 0 14px" }}>
+          Aligned Execution Pipeline
+        </h3>
+        <div style={{ ...card, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
-              <tr style={{ background: "#F8FAFD", borderBottom: "1px solid #DDE3EE" }}>
+              <tr style={{ background: "#F8FAFD", borderBottom: "1px solid #E4EAF4" }}>
                 {["#", "Step & Tool", "Failed Status", "Baseline Status", "Alignment", "Duration Δ"].map(h => (
-                  <th key={h} className="py-3 px-4 font-semibold" style={{ color: "#6B7A99" }}>{h}</th>
+                  <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontWeight: 600, color: "#6B7A99", fontSize: 11 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {comparison?.aligned_steps?.map((s: any, i: number) => (
+              {cmp?.aligned_steps?.map((s: any, i: number) => (
                 <tr key={i}
-                  className="transition-colors"
-                  style={{
-                    background: s.is_divergent ? "#FFFBEB" : "transparent",
-                    borderBottom: i < (comparison.aligned_steps.length-1) ? "1px solid #EEF2F7" : "none",
-                  }}>
-                  <td className="py-3.5 px-4 font-mono" style={{ color: "#9BA8BF" }}>{s.step_index}</td>
-                  <td className="py-3.5 px-4">
-                    <span className="font-semibold" style={{ color: "#1A2236" }}>{s.step_name}</span>
-                    <span className="font-mono ml-1 text-[11px]" style={{ color: "#9BA8BF" }}>({s.tool_name})</span>
+                  style={{ background: s.is_divergent ? "#FFFBEB" : "transparent", borderBottom: i < cmp.aligned_steps.length-1 ? "1px solid #F0F4FA" : "none" }}>
+                  <td style={{ padding: "12px 16px", fontFamily: "monospace", color: "#9BA8BF" }}>{s.step_index}</td>
+                  <td style={{ padding: "12px 16px" }}>
+                    <span style={{ fontWeight: 700, color: "#1A2236" }}>{s.step_name}</span>
+                    <span style={{ fontFamily: "monospace", fontSize: 10.5, color: "#9BA8BF", marginLeft: 6 }}>({s.tool_name})</span>
                   </td>
-                  <td className="py-3.5 px-4">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
-                      style={s.target_run_status === "SUCCESS"
-                        ? { background: "#ECFDF5", color: "#16A34A" }
-                        : { background: "#FFF1F2", color: "#DC2626" }}>
+                  <td style={{ padding: "12px 16px" }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999, textTransform: "uppercase", ...(s.target_run_status === "SUCCESS" ? { background: "#F0FDF4", color: "#16A34A" } : { background: "#FFF1F2", color: "#DC2626" }) }}>
                       {s.target_run_status}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
-                      style={{ background: "#ECFDF5", color: "#16A34A" }}>
+                  <td style={{ padding: "12px 16px" }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999, textTransform: "uppercase", background: "#F0FDF4", color: "#16A34A" }}>
                       {s.baseline_run_status}
                     </span>
                   </td>
-                  <td className="py-3.5 px-4">
+                  <td style={{ padding: "12px 16px" }}>
                     {s.is_divergent ? (
-                      <span className="flex items-center gap-1 text-xs font-bold"
-                        style={{ color: "#B45309" }}>
-                        <AlertTriangle className="w-3 h-3" /> Divergent
+                      <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, color: "#B45309" }}>
+                        <AlertTriangle style={{ width: 13, height: 13 }} /> Divergent
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1 text-xs" style={{ color: "#22C55E" }}>
-                        <CheckCircle2 className="w-3 h-3" /> Aligned
+                      <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#22C55E" }}>
+                        <CheckCircle2 style={{ width: 13, height: 13 }} /> Aligned
                       </span>
                     )}
                   </td>
-                  <td className="py-3.5 px-4 font-mono" style={{ color: "#6B7A99" }}>
+                  <td style={{ padding: "12px 16px", fontFamily: "monospace", color: "#6B7A99", fontSize: 11 }}>
                     {s.target_duration_ms?.toFixed(0)}ms / {s.baseline_duration_ms?.toFixed(0)}ms
                   </td>
                 </tr>

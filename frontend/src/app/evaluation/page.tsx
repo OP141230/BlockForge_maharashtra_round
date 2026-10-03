@@ -1,137 +1,142 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { BarChart3, Play, CheckCircle2, Zap } from "lucide-react";
+import { Play, CheckCircle2 } from "lucide-react";
 import { fetchBenchmark, runBenchmarkSuite } from "@/lib/api";
+
+const S = {
+  card: { background: "#FFFFFF", borderRadius: 16, border: "1px solid #E4EAF4", boxShadow: "0 2px 10px rgba(26,34,54,0.05)" } as React.CSSProperties,
+  label: { fontSize: 10.5, fontWeight: 500, color: "#9BA8BF", margin: "0 0 3px" } as React.CSSProperties,
+  tag: (bg: string, color: string, border?: string): React.CSSProperties => ({
+    fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase",
+    padding: "3px 10px", borderRadius: 999, background: bg, color,
+    border: border ? `1px solid ${border}` : undefined,
+  }),
+};
 
 export default function EvaluationStudioPage() {
   const [benchmark, setBenchmark] = useState<any>(null);
-  const [isRunning, setIsRunning] = useState(false);
+  const [running,   setRunning]   = useState(false);
 
   useEffect(() => { fetchBenchmark().then(setBenchmark); }, []);
 
   const handleRun = async () => {
-    setIsRunning(true);
-    try { setBenchmark(await runBenchmarkSuite()); }
-    catch (e) { console.error(e); }
-    finally { setIsRunning(false); }
+    setRunning(true);
+    try { setBenchmark(await runBenchmarkSuite()); } catch {}
+    finally { setRunning(false); }
   };
 
   const models  = benchmark?.models || benchmark?.baselines || {};
-  const hybrid  = models?.blackbox_hybrid   || {};
-  const last    = models?.baseline_last_step || {};
-  const rule    = models?.baseline_rule_only || {};
+  const hybrid  = models?.blackbox_hybrid     || {};
+  const last    = models?.baseline_last_step  || {};
+  const rule    = models?.baseline_rule_only  || {};
   const anomaly = models?.baseline_anomaly_only || {};
-  const cases   = benchmark?.detailed_cases || benchmark?.detailed_results || [];
+  const cases   = benchmark?.detailed_cases   || benchmark?.detailed_results || [];
 
   const metricCards = [
-    { label: "Top-1 Accuracy", value: hybrid.top1_accuracy != null ? `${(hybrid.top1_accuracy*100).toFixed(0)}%` : "—",
-      sub: `vs Last-Step: ${last.top1_accuracy != null ? (last.top1_accuracy*100).toFixed(0)+"%" : "—"}`,
-      color: "#7C5CFF", bg: "#F3EEFF" },
-    { label: "Top-3 Accuracy", value: hybrid.top3_accuracy != null ? `${(hybrid.top3_accuracy*100).toFixed(0)}%` : "—",
-      sub: "Reliable Isolation", color: "#3B82F6", bg: "#EEF2FF" },
-    { label: "Mean Reciprocal Rank", value: hybrid.mrr != null ? hybrid.mrr.toFixed(3) : "—",
-      sub: `Rule-Only: ${rule.mrr?.toFixed(3) || "—"}`, color: "#22C55E", bg: "#ECFDF5" },
+    { label: "Top-1 Accuracy (Exact Root Cause)", value: hybrid.top1_accuracy != null ? `${(hybrid.top1_accuracy*100).toFixed(0)}%` : "—", color: "#7C5CFF", bg: "#F5F3FF", rows: [{ name: "BLACKBOX Hybrid", v: hybrid.top1_accuracy, c: "#7C5CFF" }, { name: "Rule-Only", v: rule.top1_accuracy, c: "#9BA8BF" }, { name: "Last-Step", v: last.top1_accuracy, c: "#9BA8BF" }] },
+    { label: "Top-3 Accuracy (In Suspect Pool)", value: hybrid.top3_accuracy != null ? `${(hybrid.top3_accuracy*100).toFixed(0)}%` : "—", color: "#3B82F6", bg: "#EFF6FF", rows: [{ name: "BLACKBOX Hybrid", v: hybrid.top3_accuracy, c: "#3B82F6" }, { name: "Anomaly-Only", v: anomaly.top3_accuracy, c: "#9BA8BF" }, { name: "Last-Step", v: last.top3_accuracy, c: "#9BA8BF" }] },
+    { label: "Mean Reciprocal Rank", value: hybrid.mrr != null ? hybrid.mrr.toFixed(3) : "—", color: "#22C55E", bg: "#F0FDF4", rows: [{ name: "BLACKBOX Hybrid", v: hybrid.mrr, c: "#22C55E" }, { name: "Rule-Only", v: rule.mrr, c: "#9BA8BF" }, { name: "Last-Step", v: last.mrr, c: "#9BA8BF" }] },
   ];
 
   return (
-    <div className="p-8 space-y-7 max-w-6xl mx-auto w-full">
-      <div className="flex items-start justify-between gap-6">
+    <div className="p-7 space-y-6 max-w-6xl mx-auto w-full">
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20 }}>
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full"
-              style={{ background: "#EEF2FF", color: "#3B82F6", border: "1px solid #C7D7FD" }}>
-              Evaluation Studio
-            </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span style={S.tag("#EFF6FF", "#3B82F6", "#BFDBFE")}>Evaluation Studio</span>
+            <span style={{ fontSize: 11, color: "#9BA8BF" }}>● Ground-Truth Benchmark</span>
           </div>
-          <h1 className="text-3xl font-black tracking-tight" style={{ color: "#1A2236" }}>
+          <h1 style={{ fontSize: 24, fontWeight: 900, color: "#1A2236", letterSpacing: "-0.02em", margin: 0 }}>
             Diagnosis Accuracy &amp; Benchmark Suite
           </h1>
-          <p className="text-sm mt-1" style={{ color: "#6B7A99" }}>
-            Empirically evaluating fault localization accuracy (Top-1, Top-3, MRR) across labeled failure test cases.
+          <p style={{ fontSize: 13, color: "#6B7A99", marginTop: 5, maxWidth: 520, lineHeight: 1.5 }}>
+            Evaluating fault localization accuracy (Top-1, Top-3, MRR) across labeled failure test cases.
           </p>
         </div>
-        <button onClick={handleRun} disabled={isRunning}
-          className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-sm text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-50"
-          style={{ background: "#3B82F6", boxShadow: "0 4px 18px rgba(59,130,246,0.30)" }}>
-          <Play className="w-4 h-4 fill-current" />
-          {isRunning ? "Running…" : "Execute Benchmark Suite"}
+        <button onClick={handleRun} disabled={running} style={{
+          display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
+          padding: "10px 20px", borderRadius: 12, fontWeight: 700, fontSize: 13,
+          color: "white", border: "none", cursor: running ? "not-allowed" : "pointer",
+          background: "#3B82F6", boxShadow: "0 4px 14px rgba(59,130,246,0.28)",
+          opacity: running ? 0.65 : 1,
+        }}>
+          <Play style={{ width: 14, height: 14 }} />
+          {running ? "Running…" : "Execute Benchmark Suite"}
         </button>
-      </div>
-
-      {/* Metric cards */}
-      <div className="grid grid-cols-3 gap-5">
-        {metricCards.map((c) => (
-          <div key={c.label} className="rounded-2xl p-6 space-y-2"
-            style={{ background: "#FFFFFF", border: "1px solid #DDE3EE", boxShadow: "0 2px 10px rgba(26,34,54,0.05)" }}>
-            <p className="text-xs font-medium" style={{ color: "#6B7A99" }}>{c.label}</p>
-            <p className="text-3xl font-black font-mono" style={{ color: c.color }}>{c.value}</p>
-            <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "#EEF2F7" }}>
-              <div className="h-full rounded-full" style={{
-                background: c.color,
-                width: c.value.includes("%") ? c.value : "70%",
-              }} />
-            </div>
-            <p className="text-[11px]" style={{ color: "#9BA8BF" }}>{c.sub}</p>
-          </div>
-        ))}
       </div>
 
       {/* Small benchmark notice */}
       {cases.length < 20 && (
-        <div className="rounded-xl px-4 py-3 text-xs font-medium"
-          style={{ background: "#FFFBEB", border: "1px solid #FDE68A", color: "#92400E" }}>
-          Small benchmark ({cases.length} cases): results are illustrative.
-          Report counts alongside percentages — no weight tuning on test split.
+        <div style={{ padding: "10px 16px", borderRadius: 10, background: "#FFFBEB", border: "1px solid #FDE68A", fontSize: 12, color: "#92400E", fontWeight: 500 }}>
+          Small benchmark ({cases.length} cases) — results are illustrative. Counts shown alongside percentages. No weight tuning on test split.
         </div>
       )}
 
+      {/* Metric cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
+        {metricCards.map((c) => (
+          <div key={c.label} style={{ ...S.card, padding: "20px 22px" }}>
+            <p style={S.label}>{c.label}</p>
+            <p style={{ fontSize: 30, fontWeight: 900, color: c.color, fontFamily: "monospace", margin: "4px 0 10px", lineHeight: 1 }}>{c.value}</p>
+            <div style={{ height: 4, background: "#F0F4FA", borderRadius: 99, marginBottom: 12, overflow: "hidden" }}>
+              <div style={{ height: "100%", background: c.color, borderRadius: 99, width: c.value.includes("%") ? c.value : "70%", transition: "width 0.5s ease" }} />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {c.rows.map((row) => (
+                <div key={row.name} style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                  <span style={{ color: "#6B7A99" }}>{row.name}</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: row.c }}>
+                    {row.v != null ? (String(row.v).includes(".") && row.v < 2 ? row.v.toFixed(3) : `${(row.v*100).toFixed(0)}%`) : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Cases table */}
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-bold" style={{ color: "#1A2236" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: "#1A2236", margin: 0 }}>
             Labeled Failure Test Suite ({cases.length} cases)
           </h3>
-          <span className="text-xs font-mono" style={{ color: "#9BA8BF" }}>Ground-Truth Verified</span>
+          <span style={{ fontSize: 11, fontFamily: "monospace", color: "#9BA8BF" }}>Ground-Truth Verified</span>
         </div>
-        <div className="rounded-2xl overflow-hidden"
-          style={{ background: "#FFFFFF", border: "1px solid #DDE3EE", boxShadow: "0 2px 10px rgba(26,34,54,0.05)" }}>
-          <table className="w-full text-left text-xs border-collapse">
+        <div style={{ ...S.card, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
-              <tr style={{ background: "#F8FAFD", borderBottom: "1px solid #DDE3EE" }}>
-                {["Case ID", "Agent & Name", "Fault Category", "Ground Truth", "Rank", "Score", "Result"].map((h) => (
-                  <th key={h} className="py-3 px-4 font-semibold" style={{ color: "#6B7A99" }}>{h}</th>
+              <tr style={{ background: "#F8FAFD", borderBottom: "1px solid #E4EAF4" }}>
+                {["Case ID", "Agent & Name", "Fault Category", "Ground Truth", "Rank", "Score", "Result"].map(h => (
+                  <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontWeight: 600, color: "#6B7A99", fontSize: 11 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {cases.map((tc: any, i: number) => (
-                <tr key={tc.case_id}
-                  className="transition-colors hover:bg-[#F8FAFD]"
-                  style={{ borderBottom: i < cases.length-1 ? "1px solid #EEF2F7" : "none" }}>
-                  <td className="py-3.5 px-4 font-mono font-bold" style={{ color: "#9BA8BF" }}>{tc.case_id}</td>
-                  <td className="py-3.5 px-4">
-                    <span className="font-semibold" style={{ color: "#1A2236" }}>{tc.name}</span>
-                    <span className="font-mono ml-1 text-[11px]" style={{ color: "#9BA8BF" }}>({tc.agent})</span>
+                <tr key={tc.case_id} style={{ borderBottom: i < cases.length-1 ? "1px solid #F0F4FA" : "none" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "#FAFBFD")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                  <td style={{ padding: "12px 16px", fontFamily: "monospace", fontWeight: 700, color: "#9BA8BF" }}>{tc.case_id}</td>
+                  <td style={{ padding: "12px 16px" }}>
+                    <span style={{ fontWeight: 700, color: "#1A2236" }}>{tc.name}</span>
+                    <span style={{ fontFamily: "monospace", fontSize: 10.5, color: "#9BA8BF", marginLeft: 6 }}>({tc.agent})</span>
                   </td>
-                  <td className="py-3.5 px-4" style={{ color: "#6B7A99" }}>{tc.fault_category}</td>
-                  <td className="py-3.5 px-4">
-                    <span className="font-mono font-bold px-2 py-0.5 rounded"
-                      style={{ background: "#FEF3C7", color: "#B45309" }}>{tc.ground_truth}</span>
+                  <td style={{ padding: "12px 16px", color: "#6B7A99" }}>{tc.fault_category}</td>
+                  <td style={{ padding: "12px 16px" }}>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: "#FEF3C7", color: "#B45309" }}>{tc.ground_truth}</span>
                   </td>
-                  <td className="py-3.5 px-4 font-mono font-bold" style={{ color: "#3B82F6" }}>#{tc.hybrid_rank}</td>
-                  <td className="py-3.5 px-4 font-mono font-bold" style={{ color: "#F59E0B" }}>
-                    {tc.hybrid_suspicion_score || "—"}
-                  </td>
-                  <td className="py-3.5 px-4">
+                  <td style={{ padding: "12px 16px", fontFamily: "monospace", fontWeight: 700, color: "#3B82F6" }}>#{tc.hybrid_rank}</td>
+                  <td style={{ padding: "12px 16px", fontFamily: "monospace", fontWeight: 700, color: "#F59E0B" }}>{tc.hybrid_suspicion_score || "—"}</td>
+                  <td style={{ padding: "12px 16px" }}>
                     {tc.is_top1 ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"
-                        style={{ background: "#ECFDF5", color: "#16A34A" }}>
-                        <CheckCircle2 className="w-3 h-3" /> Top-1
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "#F0FDF4", color: "#16A34A" }}>
+                        <CheckCircle2 style={{ width: 11, height: 11 }} /> Top-1
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"
-                        style={{ background: "#EEF2FF", color: "#3B82F6" }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "#EFF6FF", color: "#3B82F6" }}>
                         Top-3 (#{tc.hybrid_rank})
                       </span>
                     )}

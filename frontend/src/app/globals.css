@@ -2,127 +2,130 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Google Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 :root {
-  /* Core palette — matches reference image */
-  --bg:            #EEF2F7;        /* Cool blue-gray canvas */
-  --sidebar-bg:    #F0F4FA;        /* Very light blue-gray sidebar */
-  --panel:         rgba(255, 255, 255, 0.92);
-  --panel-raised:  #FFFFFF;
-  --border:        #DDE3EE;
-  --border-strong: #C8D0E0;
-  --text:          #1A2236;        /* Deep navy */
-  --text-muted:    #6B7A99;
-  --text-faint:    #9BA8BF;
-  --primary:       #3B82F6;        /* Blue */
-  --intel:         #7C5CFF;        /* Violet/indigo */
-  --success:       #22C55E;
-  --warning:       #F59E0B;        /* Amber */
-  --danger:        #EF4444;
-  --sidebar-active: #E8EEFF;
+  --bg:           #EDF1F7;
+  --sidebar-bg:   #F2F5FB;
+  --card:         #FFFFFF;
+  --border:       #E4EAF4;
+  --border-soft:  #EEF2F8;
+  --text:         #1A2236;
+  --text-muted:   #6B7A99;
+  --text-faint:   #9BA8BF;
+  --primary:      #3B82F6;
+  --intel:        #7C5CFF;
+  --success:      #22C55E;
+  --warning:      #F59E0B;
+  --danger:       #EF4444;
 }
 
-html, body {
-  background-color: var(--bg);
-  color: var(--text);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  min-height: 100vh;
-}
+/* ── Base ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { font-size: 16px; }
 
 body {
-  /* Subtle geometric mesh overlay matching reference */
-  background-image:
-    radial-gradient(circle at 20% 50%, rgba(124,92,255,0.04) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(59,130,246,0.05) 0%, transparent 50%),
-    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23CBD5E1' stroke-width='0.4' opacity='0.4'%3E%3Cpath d='M30 0 L60 30 L30 60 L0 30 Z'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: auto, auto, 60px 60px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Very subtle dot grid — not distracting */
+  background-image: radial-gradient(circle, rgba(180,196,220,0.35) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
-/* Glass card — matches the clean white cards in reference */
-.glass-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(220, 228, 242, 0.9);
-  box-shadow: 0 2px 12px rgba(26, 34, 54, 0.06);
+/* ── Card ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(26,34,54,0.05);
 }
 
-/* Frosted diagnosis panel — top-right floating */
+.card-sm {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 6px rgba(26,34,54,0.04);
+}
+
+/* ── Glass panel (used on floating diagnosis panel) ── */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.97);
+  background: rgba(255,255,255,0.97);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(220, 228, 242, 0.95);
-  box-shadow: 0 8px 32px rgba(26, 34, 54, 0.1);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 8px 36px rgba(26,34,54,0.11), inset 0 1px 0 rgba(255,255,255,0.9);
 }
 
-/* Amber pulsing glow for suspect nodes */
-@keyframes suspectPulse {
+/* legacy alias */
+.glass-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 2px 10px rgba(26,34,54,0.05); }
+
+/* ── Graph canvas background ── */
+.graph-bg {
+  background-color: #F2F5FB;
+  background-image:
+    radial-gradient(circle at 30% 40%, rgba(124,92,255,0.05) 0%, transparent 55%),
+    radial-gradient(circle at 70% 60%, rgba(59,130,246,0.04) 0%, transparent 55%);
+}
+
+/* ── Amber pulse (suspect node) ── */
+@keyframes amberPulse {
   0%, 100% {
-    box-shadow:
-      0 0 0 0 rgba(245, 158, 11, 0.6),
-      0 0 20px rgba(245, 158, 11, 0.35),
-      inset 0 0 12px rgba(245, 158, 11, 0.15);
+    box-shadow: 0 0 0 0 rgba(245,158,11,0.55), 0 0 18px rgba(245,158,11,0.30);
   }
   50% {
-    box-shadow:
-      0 0 0 10px rgba(245, 158, 11, 0.0),
-      0 0 40px rgba(245, 158, 11, 0.5),
-      inset 0 0 18px rgba(245, 158, 11, 0.2);
+    box-shadow: 0 0 0 9px rgba(245,158,11,0.0), 0 0 32px rgba(245,158,11,0.48);
   }
 }
+.pulse-suspect { animation: amberPulse 2.2s infinite ease-in-out; }
 
-.pulse-suspect {
-  animation: suspectPulse 2s infinite ease-in-out;
-}
+/* ── Spinner ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.animate-spin { animation: spin 0.8s linear infinite; }
 
-@keyframes softPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
-.animate-soft-pulse {
-  animation: softPulse 2s infinite ease-in-out;
-}
-
-/* Sidebar nav item hover */
-.nav-item {
-  @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer;
-  color: var(--text-muted);
-}
-.nav-item:hover {
-  background: rgba(59, 130, 246, 0.07);
-  color: var(--text);
-}
-.nav-item.active {
-  background: var(--sidebar-active);
-  color: var(--primary);
-  font-weight: 600;
-}
-
-/* Mesh background for graph canvas */
-.graph-canvas {
-  background-color: #F0F4FA;
-  background-image:
-    radial-gradient(circle at 30% 40%, rgba(124,92,255,0.06) 0%, transparent 55%),
-    radial-gradient(circle at 70% 60%, rgba(59,130,246,0.05) 0%, transparent 55%),
-    url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23C8D4E8' stroke-width='0.5' opacity='0.5'%3E%3Cpath d='M40 0 L80 40 L40 80 L0 40 Z'/%3E%3Cpath d='M40 10 L70 40 L40 70 L10 40 Z'/%3E%3Cpath d='M40 20 L60 40 L40 60 L20 40 Z'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: auto, auto, 80px 80px;
-}
-
-/* Custom scrollbars */
+/* ── Scrollbars ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #C8D0E0; border-radius: 9999px; }
+::-webkit-scrollbar-thumb { background: #D0D9EA; border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: #9BA8BF; }
 
-/* Spectrum bar gradient */
-.spectrum-gradient {
+/* ── Monospace ── */
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* ── Spectrum bar gradient ── */
+.spectrum-bar {
   background: linear-gradient(
     to right,
     #94A3B8 0%,
-    #3B82F6 30%,
-    #7C5CFF 55%,
-    #F59E0B 75%,
+    #3B82F6 28%,
+    #7C5CFF 52%,
+    #F59E0B 74%,
     #EF4444 100%
   );
+  border-radius: 99px;
 }
+
+/* ── Utility: pill badge ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.badge-success { background: #F0FDF4; color: #16A34A; }
+.badge-danger  { background: #FFF1F2; color: #DC2626; }
+.badge-warning { background: #FEF3C7; color: #B45309; }
+.badge-primary { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+.badge-intel   { background: #F5F3FF; color: #6D28D9; }
