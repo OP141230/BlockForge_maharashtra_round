@@ -1,7 +1,7 @@
 import os
 import re
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Iterable, Optional
 
 from agent.agent import TravelAgent
 from recorder.recorder import TraceRecorder
@@ -78,67 +78,35 @@ def load_checkpoint_before_step(trace_dir: str, step_id: int) -> Dict[str, Any]:
     return _unwrap_checkpoint(checkpoint_payload)
 
 
+# Fault type -> (step to restart from, whether to restore the task value of a
+# constraint key before that step). Unknown fault types fall back to a full
+# replay from parse_request.
+_REPLAY_CONFIGS: Dict[str, Dict[str, Any]] = {
+    "wrong_date": {"start": "search_flights", "restore_key": "date"},
+    "wrong_destination": {"start": "search_flights", "restore_key": "destination"},
+    "budget_violation": {"start": "select_cheapest_flight"},
+    "ignored_empty_result": {"start": "search_flights"},
+    "state_overwrite": {"start": "create_booking"},
+    "hotel_checkin_violation": {"start": "select_hotel"},
+}
+
+
 def get_replay_config(failure_type: str, task: Dict[str, Any]) -> Dict[str, Any]:
     """
     Defines the intervention required to fix each known failure type.
     """
-    if failure_type == "wrong_date":
-        return {
-            "start_step_name": "search_flights",
-            "patches": {
-                "search_flights": {
-                    "state_override": {
-                        "constraints": {
-                            "date": task["date"]
-                        }
-                    }
-                }
-            },
+    spec = _REPLAY_CONFIGS.get(failure_type)
+    if spec is None:
+        return {"start_step_name": "parse_request", "patches": {}}
+
+    patches: Dict[str, Any] = {}
+    restore_key = spec.get("restore_key")
+    if restore_key:
+        patches[spec["start"]] = {
+            "state_override": {"constraints": {restore_key: task[restore_key]}}
         }
 
-    elif failure_type == "wrong_destination":
-        return {
-            "start_step_name": "search_flights",
-            "patches": {
-                "search_flights": {
-                    "state_override": {
-                        "constraints": {
-                            "destination": task["destination"]
-                        }
-                    }
-                }
-            },
-        }
-
-    elif failure_type == "budget_violation":
-        return {
-            "start_step_name": "select_cheapest_flight",
-            "patches": {},
-        }
-
-    elif failure_type == "ignored_empty_result":
-        return {
-            "start_step_name": "search_flights",
-            "patches": {},
-        }
-
-    elif failure_type == "state_overwrite":
-        return {
-            "start_step_name": "create_booking",
-            "patches": {},
-        }
-
-    elif failure_type == "hotel_checkin_violation":
-        return {
-            "start_step_name": "select_hotel",
-            "patches": {},
-        }
-
-    else:
-        return {
-            "start_step_name": "parse_request",
-            "patches": {},
-        }
+    return {"start_step_name": spec["start"], "patches": patches}
 
 
 def run_replay(
@@ -147,9 +115,14 @@ def run_replay(
     start_step_name: str,
     patches: Dict[str, Any],
     base_dir: str = "data/replays",
+    defects: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """
     Executes a counterfactual replay of the agent from a checkpoint.
+
+    Injected faults are NOT re-applied (fault_config=None). Persistent defects
+    in the agent's own logic are passed through via `defects`, so they survive
+    replay unless a patch disables them.
     """
     recorder = TraceRecorder(task=task, base_dir=base_dir)
 
@@ -160,6 +133,7 @@ def run_replay(
         initial_state=initial_state,
         start_step_name=start_step_name,
         patches=patches,
+        defects=defects,
     )
 
     trace = agent.run()

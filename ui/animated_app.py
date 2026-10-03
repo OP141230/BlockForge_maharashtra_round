@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import streamlit as st
+import pandas as pd
 import streamlit.components.v1 as components
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -579,7 +580,7 @@ if (P.divergence) {
   let db = '<div class="stat"><span>Healthy baseline</span><b style="font-size:10px">' +
     esc(String(d.baseline_trace_id).slice(0, 18)) + '…</b></div>' +
     '<div class="stat"><span>First divergent stage</span><b style="color:#fb7185">Step ' + d.step_id +
-    ' · ' + esc(String(d.step_name).replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase())) + '</b></div>' +
+    ' · ' + esc(String(d.step_name).replace(/_/g, ' ').replace(/\\b\\w/g, m => m.toUpperCase())) + '</b></div>' +
     '<div style="margin-top:10px">';
   for (const dd of d.diffs) {
     db += '<div class="note mono" style="margin-bottom:6px;color:#cbd5e1">' + esc(dd.path) +
@@ -768,6 +769,38 @@ def render_evaluation_studio():
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # --- RIGOROUS ML METRICS ---
+    rig_path = os.path.join("data", "models", "rigorous_metrics.json")
+    if os.path.exists(rig_path):
+        with open(rig_path, "r") as f:
+            rig = json.load(f)
+            
+        st.markdown("<h3 style='font-family:monospace; color:#22d3ee; margin-top:30px;'>Model Rigor & Baselines</h3>", unsafe_allow_html=True)
+        
+        c1, c2, c3 = st.columns(3)
+        auc = rig.get("full_model", {}).get("fail_detection_auc", 0)
+        c1.metric("Fail Detection AUC", f"{auc:.3f}")
+        
+        baselines = rig.get("baselines", {})
+        c2.metric("Baseline: Random Step", f"{baselines.get('random_step', 0)*100:.1f}%")
+        c3.metric("Baseline: Always Last", f"{baselines.get('always_last_step', 0)*100:.1f}%")
+        
+        st.markdown("---")
+        
+        # Learning Curve Chart
+        lc = rig.get("learning_curve", [])
+        if lc:
+            df_lc = pd.DataFrame(lc)
+            st.subheader("Learning Curve (Top-1 Accuracy vs Dataset Size)")
+            st.line_chart(df_lc.set_index("train_runs")["top1"])
+            
+        # Ablation Chart
+        abl = rig.get("ablation", {})
+        if abl:
+            df_abl = pd.DataFrame(list(abl.items()), columns=["Configuration", "Top-1"])
+            st.subheader("Ablation Study (Unseen Fault Generalization)")
+            st.bar_chart(df_abl.set_index("Configuration")["Top-1"])
 
 def render_diff_lab(trace, replay_report):
     """Renders the side-by-side state diff when a replay is executed."""

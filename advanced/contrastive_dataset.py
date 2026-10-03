@@ -38,7 +38,8 @@ def generate_attempts_for_trace(trace, report, model, max_attempts=10):
                 initial_state=initial_state,
                 start_step_name=target_step_name,
                 patches=intervention.get("patch", {}),
-                base_dir="data/contrastive/replays"
+                base_dir="data/contrastive/replays",
+                defects=trace.get("defects"),
             )
             
             replay_status = replay_trace.get("status")

@@ -325,4 +325,17 @@ def propose_interventions(
                     }
                 )
 
+        # Intervention 4: hotfix the step's own logic. Needed when the bug lives
+        # in the agent (a persistent defect) and so survives a plain replay.
+        add_intervention(
+            {
+                "intervention_id": f"{step_name}_disable_step_defect",
+                "intervention_type": "disable_step_defect",
+                "target_step_name": step_name,
+                "target_step_id": step_id,
+                "patch": {step_name: {"disable_defects": True}},
+                "rationale": "Re-execute this step and the rest of the run with the reference (defect-free) step logic.",
+            }
+        )
+
     return interventions

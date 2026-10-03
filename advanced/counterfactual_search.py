@@ -225,6 +225,7 @@ def search_fix(
                 start_step_name=target_step_name,
                 patches=intervention.get("patch", {}),
                 base_dir=base_dir,
+                defects=trace.get("defects"),
             )
 
             replay_status = replay_trace.get("status")
