@@ -4,21 +4,11 @@ from diagnosis.spec_engine import evaluate_trace
 
 
 FEATURE_NAMES = [
-    "step_position",
-    "distance_from_end",
-    "is_planner",
-    "is_tool_call",
-    "is_transform",
-    "is_decision",
-    "is_validator",
-    "is_output",
-    "has_error",
     "confidence",
     "low_confidence",
     "latency_ms",
     "output_empty",
     "state_changed_key_count",
-    "violation_count",
     "is_earliest_violation",
     "has_search_input_mismatch",
     "has_selected_flight_invalid",
@@ -26,7 +16,15 @@ FEATURE_NAMES = [
     "has_booking_input_lost",
     "has_filter_violation",
     "final_violation_count",
+    "feeds_earliest_violation",
+    "is_ancestor_of_earliest",
+    "ancestor_hops_norm",
+    "undeclared_state_write",
 ]
+
+
+def _safe_list(value: Any) -> List[Any]:
+    return value if isinstance(value, list) else []
 
 
 def _safe_dict(value: Any) -> Dict[str, Any]:
@@ -82,6 +80,24 @@ def _state_changed_key_count(state_before: Any, state_after: Any) -> float:
     return float(changed)
 
 
+def _undeclared_write(step_name: Any, state_before: Any, state_after: Any) -> float:
+    """1.0 if the step changed a state key that is not in its declared write set.
+
+    Healthy steps only touch the keys the agent's data-flow map says they write.
+    A change anywhere else (a corrupted input, an injected flag) is a generic,
+    label-free sign that something other than the step's own logic altered state.
+    """
+    from diagnosis.provenance import STEP_WRITES
+
+    declared = set(STEP_WRITES.get(step_name, []))
+    before = _safe_dict(state_before)
+    after = _safe_dict(state_after)
+    for key in set(before) | set(after):
+        if key not in declared and before.get(key) != after.get(key):
+            return 1.0
+    return 0.0
+
+
 def _step_violations_for_step(report: Dict[str, Any], step_id: Any) -> List[Dict[str, Any]]:
     violations = report.get("step_violations", [])
     if not isinstance(violations, list):
@@ -102,6 +118,36 @@ def _has_invariant_prefix(violations: List[Dict[str, Any]], prefixes: Tuple[str,
             return 1.0
 
     return 0.0
+
+
+def _ancestor_hops(earliest_name: str) -> Dict[str, int]:
+    """Steps upstream of `earliest_name` in the agent's data-flow graph.
+
+    Returns {step_name: hops}, where 1 means the step directly writes a state key
+    that `earliest_name` reads. Uses the static read/write map from provenance,
+    so it needs no ground truth and no fault labels.
+    """
+    from diagnosis.provenance import STEP_READS, STEP_WRITES
+
+    writers: Dict[str, List[str]] = {}
+    for name, keys in STEP_WRITES.items():
+        for key in keys:
+            writers.setdefault(key, []).append(name)
+
+    hops: Dict[str, int] = {}
+    frontier = [earliest_name]
+    depth = 0
+    while frontier:
+        depth += 1
+        nxt: List[str] = []
+        for name in frontier:
+            for key in STEP_READS.get(name, []):
+                for parent in writers.get(key, []):
+                    if parent != earliest_name and parent not in hops:
+                        hops[parent] = depth
+                        nxt.append(parent)
+        frontier = nxt
+    return hops
 
 
 def build_step_features(
@@ -146,7 +192,6 @@ def build_step_features(
         features["is_output"] = 1.0
 
     # Execution features
-    features["has_error"] = 1.0 if step.get("error") else 0.0
 
     confidence = _to_float(step.get("confidence"), default=0.0)
     features["confidence"] = confidence
@@ -161,10 +206,13 @@ def build_step_features(
         step.get("state_after"),
     )
 
+    features["undeclared_state_write"] = _undeclared_write(
+        step.get("name"), step.get("state_before"), step.get("state_after")
+    )
+
     # Spec violation features
     step_violations = _step_violations_for_step(report, step_id)
 
-    features["violation_count"] = float(len(step_violations))
 
     earliest_step_signal = report.get("earliest_step_signal")
     if step_id is not None and step_id == earliest_step_signal:
@@ -199,6 +247,23 @@ def build_step_features(
         report.get("total_final_violations"),
         default=0.0,
     )
+
+    # Causal-position features: where is this step relative to the first symptom?
+    # A fault can first *show* downstream of the step that caused it (e.g. a bypassed
+    # filter shows up when the selector reads its output), so we expose data-flow
+    # distance to the earliest violation instead of relying on "earliest" alone.
+    if earliest_step_signal is not None:
+        earliest_name = None
+        for other in _safe_list(trace.get("steps")):
+            if _safe_dict(other).get("step_id") == earliest_step_signal:
+                earliest_name = _safe_dict(other).get("name")
+                break
+        hops = _ancestor_hops(earliest_name) if earliest_name else {}
+        h = hops.get(step.get("name"))
+        if h is not None:
+            features["is_ancestor_of_earliest"] = 1.0
+            features["feeds_earliest_violation"] = 1.0 if h == 1 else 0.0
+            features["ancestor_hops_norm"] = 1.0 / h
 
     return features
 

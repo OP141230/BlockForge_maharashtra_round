@@ -14,6 +14,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.model_selection import GroupKFold, cross_val_score
 
 from diagnosis.loader import load_traces
 from diagnosis.spec_engine import evaluate_trace
@@ -27,6 +28,7 @@ def load_attempts(path):
 def build_features(attempts, traces_map):
     X = []
     y = []
+    groups = []
 
     for attempt in attempts:
         trace_id = attempt.get("trace_id")
@@ -57,8 +59,9 @@ def build_features(attempts, traces_map):
 
         X.append(features)
         y.append(1 if attempt.get("fixed") else 0)
+        groups.append(trace_id)
 
-    return X, y
+    return X, y, groups
 
 
 def main():
@@ -77,7 +80,7 @@ def main():
     traces = load_traces("data/traces")
     traces_map = {t.get("trace_id"): t for t in traces}
 
-    X, y = build_features(attempts, traces_map)
+    X, y, groups = build_features(attempts, traces_map)
 
     if not X:
         print("No valid features could be extracted.")
@@ -117,9 +120,19 @@ def main():
         ]
     )
 
+    # Held-out estimate: every fold leaves out ALL attempts of some traces, so the
+    # model is scored on traces it has never seen (training accuracy alone is not
+    # evidence of generalisation on 60 rows).
+    n_groups = len(set(groups))
+    cv_scores = []
+    if n_groups >= 2:
+        cv = GroupKFold(n_splits=min(5, n_groups))
+        cv_scores = cross_val_score(model, df_X, y, cv=cv, groups=groups, scoring="accuracy")
+
     model.fit(df_X, y)
 
     train_accuracy = model.score(df_X, y)
+    majority_baseline = max(sum(y), len(y) - sum(y)) / len(y)
 
     os.makedirs("data/models", exist_ok=True)
     model_path = "data/models/intervention_model.pkl"
@@ -127,6 +140,21 @@ def main():
         pickle.dump(model, f)
 
     print(f"Training accuracy: {train_accuracy:.4f}")
+    if len(cv_scores):
+        print(f"Grouped CV accuracy (held-out traces): {cv_scores.mean():.4f} +/- {cv_scores.std():.4f}")
+    print(f"Majority-class baseline: {majority_baseline:.4f}")
+    with open("data/models/intervention_model_metrics.json", "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "samples": len(y),
+                "train_accuracy": train_accuracy,
+                "grouped_cv_accuracy_mean": float(cv_scores.mean()) if len(cv_scores) else None,
+                "grouped_cv_accuracy_std": float(cv_scores.std()) if len(cv_scores) else None,
+                "majority_baseline": majority_baseline,
+            },
+            f,
+            indent=2,
+        )
     print(f"Model saved to {model_path}")
     print("Phase 7D completed successfully.")
 

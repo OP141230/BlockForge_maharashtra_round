@@ -8,7 +8,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from diagnosis.loader import load_traces
-from advanced.counterfactual_search import search_fix
+from advanced.counterfactual_search import search_fix, load_ranker
+from ml.localization import evaluate_localization, format_localization
 
 def main():
     print("Black Box Phase 7E: Unseen Fault Evaluation")
@@ -62,6 +63,26 @@ def main():
 
     print(f"Saved unseen evaluation reports to: {output_path}")
     print(f"Fix rate on unseen faults: {success_count}/{len(failed_traces)}")
+
+    first_try = sum(1 for r in reports if r.get("fixed") and len(r.get("attempts", [])) == 1)
+    print(f"Fixed on first attempt: {first_try}/{len(failed_traces)}")
+
+    ranker = load_ranker()
+    loc = evaluate_localization(failed_traces, ranker.get("weights", {}), ranker.get("bias", 0.0))
+    print(format_localization(loc, "Zero-shot localization on unseen families"))
+
+    summary_path = os.path.join("data", "unseen_evaluation", "summary.json")
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "fixed": success_count,
+                "total": len(failed_traces),
+                "fixed_first_attempt": first_try,
+                "localization": loc,
+            },
+            f,
+            indent=2,
+        )
 
     if success_count != len(failed_traces):
         print("WARNING: Not all unseen faults were fixed. This is expected for truly novel failures.")

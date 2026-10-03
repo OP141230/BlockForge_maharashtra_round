@@ -52,7 +52,7 @@ SCENARIOS = [
         "name": "ignored_empty_result",
         "fault_config": {
             "fault_type": "ignored_empty_result",
-            "root_cause_step_id": 5,
+            "root_cause_step_id": 3,
             "description": "Flight search returns empty results, but the agent continues with a hallucinated flight.",
         },
         "expected_status": "failed",

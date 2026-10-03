@@ -1,0 +1,41 @@
+{
+  "model_type": "logistic_regression_ranker",
+  "description": "L2 logistic regression over per-step features, scaler folded into weights.",
+  "feature_names": [
+    "confidence",
+    "low_confidence",
+    "latency_ms",
+    "output_empty",
+    "state_changed_key_count",
+    "is_earliest_violation",
+    "has_search_input_mismatch",
+    "has_selected_flight_invalid",
+    "has_selected_hotel_invalid",
+    "has_booking_input_lost",
+    "has_filter_violation",
+    "final_violation_count",
+    "feeds_earliest_violation",
+    "is_ancestor_of_earliest",
+    "ancestor_hops_norm",
+    "undeclared_state_write"
+  ],
+  "weights": {
+    "confidence": -13.788837883547966,
+    "low_confidence": -0.13685357516157298,
+    "latency_ms": 3.6308308068514905,
+    "output_empty": 0.5582649096171837,
+    "state_changed_key_count": 1.7403875955546226,
+    "is_earliest_violation": 9.388745404180963,
+    "has_search_input_mismatch": 0.8811524577860148,
+    "has_selected_flight_invalid": 2.7133796456289647,
+    "has_selected_hotel_invalid": 2.8429592764568112,
+    "has_booking_input_lost": 2.373865565469388,
+    "has_filter_violation": -0.2758190332733939,
+    "final_violation_count": -0.32845845288364733,
+    "feeds_earliest_violation": -0.17424578859241643,
+    "is_ancestor_of_earliest": -0.3065243382565375,
+    "ancestor_hops_norm": -0.35675069200900494,
+    "undeclared_state_write": 2.4163371065955572
+  },
+  "bias": 4.775412623589385
+}

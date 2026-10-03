@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import streamlit as st
+import pandas as pd
 import streamlit.components.v1 as components
 from html import escape as esc
 
@@ -580,8 +581,8 @@ if (P.divergence) {
   const d = P.divergence;
   let db = '<div class="stat"><span>Healthy baseline</span><b style="font-size:11px">' +
     esc(String(d.baseline_trace_id).slice(0, 18)) + '…</b></div>' +
-    '<div class="stat"><span>First divergent stage</span><b style="color:#dc2626">Step ' + d.step_id +
-    ' · ' + esc(String(d.step_name).replace(/_/g, ' ').replace(/\\b\\w/g, m => m.toUpperCase())) + '</b></div>' +
+    '<div class="stat"><span>First divergent stage</span><b style="color:#fb7185">Step ' + d.step_id +
+    ' · ' + esc(String(d.step_name).replace(/_/g, ' ').replace(/\b\w/g, m => m.toUpperCase())) + '</b></div>' +
     '<div style="margin-top:10px">';
   for (const dd of d.diffs) {
     db += '<div class="note mono" style="margin-bottom:6px;color:#475569">' + esc(dd.path) +
@@ -769,7 +770,6 @@ def render_evaluation_studio():
         </div>
     </div>
     """, unsafe_allow_html=True)
-
 
 def render_diff_lab(trace, replay_report):
     """Renders the side-by-side state diff when a replay is executed."""

@@ -1,6 +1,6 @@
 import time
 from copy import deepcopy
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 
 from .tools import search_flights, search_hotels
 from .faults import FaultInjector
@@ -19,6 +19,7 @@ class TravelAgent:
         initial_state: Optional[Dict[str, Any]] = None,
         start_step_name: Optional[str] = None,
         patches: Optional[Dict[str, Any]] = None,
+        defects: Optional[Iterable[str]] = None,
     ) -> None:
         self.task = task
         self.recorder = recorder
@@ -26,7 +27,14 @@ class TravelAgent:
         self.state = deepcopy(initial_state) if initial_state else {}
         self.start_step_name = start_step_name
         self.patches = patches or {}
-        
+
+        # Persistent defects live in the agent's own step logic (unlike faults,
+        # which are injected from outside). They survive replay, so replaying
+        # without a patch does NOT make them go away.
+        self.defects = set(defects or [])
+        if self.defects and hasattr(recorder, "trace"):
+            recorder.trace["defects"] = sorted(self.defects)
+
         # If start_step_name is provided, we are in replay mode
         self._skip_mode = start_step_name is not None
         self._is_replay = start_step_name is not None
@@ -107,6 +115,10 @@ class TravelAgent:
                     else:
                         self.state[k] = v
 
+            if patch.get("disable_defects"):
+                # Hotfix: switch off the persistent defects from this step on.
+                self.defects.clear()
+
         input_data = input_payload() if callable(input_payload) else input_payload
 
         start_time = time.perf_counter()
@@ -174,9 +186,13 @@ class TravelAgent:
             flights = []
         else:
             constraints = state.get("constraints", {})
+            origin, destination = constraints.get("origin"), constraints.get("destination")
+            if "search_swaps_route" in self.defects:
+                # Bug: origin and destination are passed the wrong way round.
+                origin, destination = destination, origin
             flights = search_flights(
-                origin=constraints.get("origin"),
-                destination=constraints.get("destination"),
+                origin=origin,
+                destination=destination,
                 date=constraints.get("date"),
             )
         state["flights"] = flights
@@ -186,7 +202,11 @@ class TravelAgent:
         flights = state.get("flights", [])
         constraints = state.get("constraints", {})
         budget = constraints.get("flight_price_max", 0)
-        filtered_flights = [f for f in flights if f.get("price", float("inf")) <= budget]
+        if "budget_filter_inverted" in self.defects:
+            # Bug: keeps flights at or above the budget instead of at or below.
+            filtered_flights = [f for f in flights if f.get("price", 0) >= budget]
+        else:
+            filtered_flights = [f for f in flights if f.get("price", float("inf")) <= budget]
         state["filtered_flights"] = filtered_flights
         return {"filtered_flights": filtered_flights}
 
@@ -194,15 +214,24 @@ class TravelAgent:
         filtered_flights = state.get("filtered_flights", [])
         selected_flight = None
         if filtered_flights:
-            selected_flight = min(filtered_flights, key=lambda f: f.get("price", float("inf")))
+            if "select_reads_unfiltered_list" in self.defects:
+                # Bug: picks the most expensive of the *unfiltered* flights.
+                selected_flight = max(state.get("flights", []), key=lambda f: f.get("price", 0))
+            else:
+                selected_flight = min(filtered_flights, key=lambda f: f.get("price", float("inf")))
         state["selected_flight"] = selected_flight
         return {"selected_flight": selected_flight}
 
     def _search_hotels(self, state: Dict[str, Any]) -> Dict[str, Any]:
         constraints = state.get("constraints", {})
+        checkin_date = constraints.get("date")
+        if "hotel_search_stale_date" in self.defects and checkin_date:
+            # Bug: searches hotels for the day before the trip.
+            from datetime import date as _d, timedelta as _td
+            checkin_date = (_d.fromisoformat(checkin_date) - _td(days=1)).isoformat()
         hotels = search_hotels(
             city=constraints.get("destination"),
-            checkin_date=constraints.get("date"),
+            checkin_date=checkin_date,
         )
         state["hotels"] = hotels
         return {"hotels": hotels}
@@ -211,7 +240,10 @@ class TravelAgent:
         hotels = state.get("hotels", [])
         constraints = state.get("constraints", {})
         hotel_checkin_after = constraints.get("hotel_checkin_after", "00:00")
-        filtered_hotels = [h for h in hotels if h.get("checkin_time", "00:00") >= hotel_checkin_after]
+        if "hotel_filter_inverted" in self.defects:
+            filtered_hotels = [h for h in hotels if h.get("checkin_time", "00:00") < hotel_checkin_after]
+        else:
+            filtered_hotels = [h for h in hotels if h.get("checkin_time", "00:00") >= hotel_checkin_after]
         state["filtered_hotels"] = filtered_hotels
         return {"filtered_hotels": filtered_hotels}
 
@@ -230,13 +262,22 @@ class TravelAgent:
                 "booking_id": "BK-1000",
                 "flight": selected_flight,
                 "hotel": selected_hotel,
-                "total_price": selected_flight.get("price", 0) + selected_hotel.get("price", 0),
+                "total_price": selected_flight.get("price", 0) + selected_hotel.get("price_per_night", selected_hotel.get("price", 0)),
             }
         state["booking"] = booking
         return {"booking": booking}
 
     def _validate_final_result(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        constraints = state.get("constraints", {})
+        # Validate against the immutable task, NOT state["constraints"]: faults
+        # corrupt that state, and checking it against itself hides the failure.
+        t = self.task
+        constraints = {
+            "origin": t.get("origin"),
+            "destination": t.get("destination"),
+            "date": t.get("date"),
+            "flight_price_max": t.get("budget", 0),
+            "hotel_checkin_after": t.get("hotel_checkin_after", "00:00"),
+        }
         booking = state.get("booking")
         violations = []
 
