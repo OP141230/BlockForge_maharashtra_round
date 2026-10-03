@@ -1,0 +1,150 @@
+From a6d9ed3771e0dc963cd0c9a506ffafc4a522f369 Mon Sep 17 00:00:00 2001
+From: dev <dev@example.com>
+Date: Sat, 3 Oct 2026 18:49:24 +0000
+Subject: [PATCH] Phase 1: validate against task, fix hotel price, fail loudly
+ on missing ranker, fixture ranker for tests
+
+---
+ advanced/counterfactual_search.py |  9 +++---
+ agent/agent.py                    | 13 ++++++--
+ tests/conftest.py                 | 12 +++++++
+ tests/fixtures/ranker.json        | 53 +++++++++++++++++++++++++++++++
+ 4 files changed, 81 insertions(+), 6 deletions(-)
+ create mode 100644 tests/fixtures/ranker.json
+
+diff --git a/advanced/counterfactual_search.py b/advanced/counterfactual_search.py
+index 0444eef..b74d1ea 100644
+--- a/advanced/counterfactual_search.py
++++ b/advanced/counterfactual_search.py
+@@ -30,10 +30,11 @@ def load_ranker(model_path: str = "data/models/ranker.json") -> Dict[str, Any]:
+     Loads the Phase 4 ranker model.
+     """
+     if not os.path.exists(model_path):
+-        return {
+-            "weights": {},
+-            "bias": 0.0,
+-        }
++        raise FileNotFoundError(
++            f"Ranker model not found at {model_path!r}. Run `python run_all.py` "
++            "(or generate_training_dataset.py then train_ranker.py) first. "
++            "Refusing to fall back to empty weights: that silently blames the first step."
++        )
+ 
+     with open(model_path, "r", encoding="utf-8") as f:
+         return json.load(f)
+diff --git a/agent/agent.py b/agent/agent.py
+index 6840c8b..d5c8e8a 100644
+--- a/agent/agent.py
++++ b/agent/agent.py
+@@ -249,13 +249,22 @@ class TravelAgent:
+                 "booking_id": "BK-1000",
+                 "flight": selected_flight,
+                 "hotel": selected_hotel,
+-                "total_price": selected_flight.get("price", 0) + selected_hotel.get("price", 0),
++                "total_price": selected_flight.get("price", 0) + selected_hotel.get("price_per_night", selected_hotel.get("price", 0)),
+             }
+         state["booking"] = booking
+         return {"booking": booking}
+ 
+     def _validate_final_result(self, state: Dict[str, Any]) -> Dict[str, Any]:
+-        constraints = state.get("constraints", {})
++        # Validate against the immutable task, NOT state["constraints"]: faults
++        # corrupt that state, and checking it against itself hides the failure.
++        t = self.task
++        constraints = {
++            "origin": t.get("origin"),
++            "destination": t.get("destination"),
++            "date": t.get("date"),
++            "flight_price_max": t.get("budget", 0),
++            "hotel_checkin_after": t.get("hotel_checkin_after", "00:00"),
++        }
+         booking = state.get("booking")
+         violations = []
+ 
+diff --git a/tests/conftest.py b/tests/conftest.py
+index fe5df85..2058156 100644
+--- a/tests/conftest.py
++++ b/tests/conftest.py
+@@ -1,3 +1,5 @@
++import os
++
+ import pytest
+ 
+ from agent.agent import TravelAgent
+@@ -30,3 +32,13 @@ def make_trace(tmp_path, task):
+         return trace, str(tmp_path)
+ 
+     return _make
++
++
++@pytest.fixture(autouse=True)
++def _ranker_fixture(monkeypatch):
++    """Tests use a committed ranker so they never depend on pipeline order."""
++    import advanced.counterfactual_search as cs
++
++    path = os.path.join(os.path.dirname(__file__), "fixtures", "ranker.json")
++    original = cs.load_ranker
++    monkeypatch.setattr(cs, "load_ranker", lambda model_path=path: original(model_path))
+diff --git a/tests/fixtures/ranker.json b/tests/fixtures/ranker.json
+new file mode 100644
+index 0000000..1209de3
+--- /dev/null
++++ b/tests/fixtures/ranker.json
+@@ -0,0 +1,53 @@
++{
++  "model_type": "feature_weight_ranker",
++  "description": "Lightweight learned ranker for Black Box failure localization.",
++  "feature_names": [
++    "step_position",
++    "distance_from_end",
++    "is_planner",
++    "is_tool_call",
++    "is_transform",
++    "is_decision",
++    "is_validator",
++    "is_output",
++    "has_error",
++    "confidence",
++    "low_confidence",
++    "latency_ms",
++    "output_empty",
++    "state_changed_key_count",
++    "violation_count",
++    "is_earliest_violation",
++    "has_search_input_mismatch",
++    "has_selected_flight_invalid",
++    "has_selected_hotel_invalid",
++    "has_booking_input_lost",
++    "has_filter_violation",
++    "final_violation_count"
++  ],
++  "weights": {
++    "step_position": -0.05422535211267604,
++    "distance_from_end": 0.054225352112676095,
++    "is_planner": -0.19718309859154928,
++    "is_tool_call": 0.24647887323943662,
++    "is_transform": -0.19718309859154928,
++    "is_decision": 0.34507042253521125,
++    "is_validator": -0.09859154929577464,
++    "is_output": -0.09859154929577464,
++    "has_error": 0.0,
++    "confidence": -0.01988262910798111,
++    "low_confidence": 0.08215962441314553,
++    "latency_ms": 0.012132549530045115,
++    "output_empty": 0.11314553990610328,
++    "state_changed_key_count": 0.33615023474178396,
++    "violation_count": 1.3816901408450704,
++    "is_earliest_violation": 1.0,
++    "has_search_input_mismatch": 0.30516431924882625,
++    "has_selected_flight_invalid": 0.31361502347417836,
++    "has_selected_hotel_invalid": 0.13849765258215962,
++    "has_booking_input_lost": 0.16666666666666666,
++    "has_filter_violation": -0.014084507042253521,
++    "final_violation_count": 0.19107981220657289
++  },
++  "bias": 0.0
++}
+\ No newline at end of file
+-- 
+2.43.0
+
