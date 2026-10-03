@@ -258,10 +258,4 @@ BlockForge_maharashtra_round/
 
 ---
 
-## Branch
-
-All work is on branch `om`. The `ad` branch is untouched.
-
----
-
 *Built for Bit N Build Hackathon — Maharashtra Round*
