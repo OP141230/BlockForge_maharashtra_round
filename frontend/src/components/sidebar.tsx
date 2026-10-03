@@ -12,6 +12,7 @@ import {
   BarChart3,
   BookOpen,
   Crosshair,
+  Map,
 } from "lucide-react";
 
 interface NavItem {
@@ -22,13 +23,14 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { name: "Overview",      href: "/",            icon: LayoutDashboard },
-  { name: "Executions",    href: "/executions",  icon: Layers },
-  { name: "Investigation", href: "/investigation",icon: Search },
-  { name: "Replay Lab",    href: "/replay",      icon: RotateCcw },
-  { name: "Comparison",    href: "/compare",     icon: GitCompare },
-  { name: "Evaluation",    href: "/evaluation",  icon: BarChart3 },
-  { name: "Patterns",      href: "/patterns",    icon: BookOpen },
+  { name: "Overview",        href: "/",                icon: LayoutDashboard },
+  { name: "Executions",      href: "/executions",      icon: Layers },
+  { name: "Investigation",   href: "/investigation",   icon: Search },
+  { name: "Replay Lab",      href: "/replay",          icon: RotateCcw },
+  { name: "Comparison",      href: "/compare",         icon: GitCompare },
+  { name: "Evaluation",      href: "/evaluation",      icon: BarChart3 },
+  { name: "Patterns",        href: "/patterns",        icon: BookOpen },
+  { name: "Itinerary Lab",   href: "/itinerary-lab",   icon: Map },
 ];
 
 export default function Sidebar() {

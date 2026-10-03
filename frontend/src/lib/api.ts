@@ -58,3 +58,68 @@ export async function fetchPatterns() {
   if (!res.ok) throw new Error("Failed to fetch patterns");
   return res.json();
 }
+
+// ── Itinerary Lab ─────────────────────────────────────────────────────────────
+
+export async function fetchItineraries() {
+  const res = await fetch(`${API_BASE}/itinerary`);
+  if (!res.ok) throw new Error("Failed to fetch itineraries");
+  return res.json();
+}
+
+export async function fetchItinerary(id: string) {
+  const res = await fetch(`${API_BASE}/itinerary/${id}`);
+  if (!res.ok) throw new Error(`Failed to fetch itinerary ${id}`);
+  return res.json();
+}
+
+export async function createItinerary(body: Record<string, any>) {
+  const res = await fetch(`${API_BASE}/itinerary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("Failed to create itinerary");
+  return res.json();
+}
+
+export async function importItinerary(raw: Record<string, any>) {
+  const res = await fetch(`${API_BASE}/itinerary/import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ raw }),
+  });
+  if (!res.ok) throw new Error("Failed to import itinerary");
+  return res.json();
+}
+
+export async function validateItinerary(id: string) {
+  const res = await fetch(`${API_BASE}/itinerary/${id}/validate`, { method: "POST" });
+  if (!res.ok) throw new Error(`Validation failed for itinerary ${id}`);
+  return res.json();
+}
+
+export async function applyItineraryFix(
+  id: string,
+  findingRuleId: string,
+  itemIndex: number,
+  fixPayload: Record<string, any>
+) {
+  const res = await fetch(`${API_BASE}/itinerary/${id}/apply-fix`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      finding_rule_id: findingRuleId,
+      item_index: itemIndex,
+      fix_payload: fixPayload,
+    }),
+  });
+  if (!res.ok) throw new Error("Failed to apply fix");
+  return res.json();
+}
+
+export async function fetchItineraryRuns(id: string) {
+  const res = await fetch(`${API_BASE}/itinerary/${id}/runs`);
+  if (!res.ok) throw new Error(`Failed to fetch runs for itinerary ${id}`);
+  return res.json();
+}

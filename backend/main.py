@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 
 from backend.database import init_db
 from backend.api import router as api_router
+from backend.itinerary_routes import itinerary_router
 
 
 @asynccontextmanager
@@ -46,6 +47,7 @@ app.add_middleware(
 
 # Include API Router
 app.include_router(api_router)
+app.include_router(itinerary_router, prefix="/api")
 
 # Static files mount if static/ or frontend build exists
 static_dir = os.path.join(os.path.dirname(__file__), "..", "static")

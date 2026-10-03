@@ -206,6 +206,79 @@ class ReplayResult(Base):
         }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ITINERARY LAB MODELS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class Itinerary(Base):
+    """Stored travel itinerary submitted to Itinerary Lab."""
+    __tablename__ = "itineraries"
+
+    id            = Column(String(64), primary_key=True, index=True)
+    name          = Column(String(256), nullable=False)
+    destination   = Column(String(256), nullable=False)
+    start_date    = Column(String(32), nullable=False)   # ISO date string
+    end_date      = Column(String(32), nullable=False)
+    travelers     = Column(Integer, default=1)
+    budget        = Column(Float, default=0.0)
+    currency      = Column(String(8), default="EUR")
+    preferences   = Column(Text, default="[]")            # JSON list of strings
+    items_json    = Column(Text, default="[]")            # JSON list of ItineraryItem dicts
+    linked_run_id = Column(String(64), nullable=True)     # links to existing BLACKBOX run
+    created_at    = Column(DateTime, default=datetime.utcnow)
+    is_demo       = Column(Boolean, default=False)
+
+    validation_runs = relationship(
+        "ItineraryValidationRun",
+        back_populates="itinerary",
+        cascade="all, delete-orphan",
+        order_by="ItineraryValidationRun.created_at",
+    )
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "destination": self.destination,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "travelers": self.travelers,
+            "budget": self.budget,
+            "currency": self.currency,
+            "preferences": json.loads(self.preferences) if self.preferences else [],
+            "items": json.loads(self.items_json) if self.items_json else [],
+            "linked_run_id": self.linked_run_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "is_demo": self.is_demo,
+        }
+
+
+class ItineraryValidationRun(Base):
+    """One execution of the validation engine against an itinerary."""
+    __tablename__ = "itinerary_validation_runs"
+
+    id              = Column(String(64), primary_key=True, index=True)
+    itinerary_id    = Column(String(64), ForeignKey("itineraries.id", ondelete="CASCADE"), nullable=False, index=True)
+    findings_json   = Column(Text, default="[]")   # list of Finding dicts
+    summary_json    = Column(Text, default="{}")   # {passed, critical, high, medium, low, optimization}
+    patched_items_json = Column(Text, nullable=True)  # items after applied fixes (None = original)
+    created_at      = Column(DateTime, default=datetime.utcnow)
+    label           = Column(String(64), default="BEFORE")  # BEFORE | AFTER
+
+    itinerary = relationship("Itinerary", back_populates="validation_runs")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "itinerary_id": self.itinerary_id,
+            "findings": json.loads(self.findings_json) if self.findings_json else [],
+            "summary": json.loads(self.summary_json) if self.summary_json else {},
+            "patched_items": json.loads(self.patched_items_json) if self.patched_items_json else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "label": self.label,
+        }
+
+
 class EvaluationBenchmark(Base):
     __tablename__ = "evaluation_benchmarks"
 
