@@ -2,129 +2,135 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  Search,
-  Activity,
-  Code2,
-  LayoutList,
-  Waypoints,
-} from "lucide-react";
+import { Activity, Code2, Waypoints, LayoutList } from "lucide-react";
 import RadialGraph from "@/components/radial-graph";
 import DiagnosisPanel from "@/components/diagnosis-panel";
-import SpectrumBar from "@/components/spectrum-bar";
 import Timeline from "@/components/timeline";
 import { fetchRun, fetchDiagnosis } from "@/lib/api";
+
+/* ─── Spectrum bar (same as overview) ─── */
+function SpectrumStrip() {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
+      padding: "10px 24px",
+      background: "rgba(255,255,255,0.88)",
+      backdropFilter: "blur(12px)",
+      borderTop: "1px solid #E4EAF4",
+      flexShrink: 0,
+    }}>
+      <span style={{ fontSize: 11, color: "#9BA8BF" }}>base</span>
+      <div style={{
+        width: 200, height: 9, borderRadius: 99,
+        background: "linear-gradient(to right,#94A3B8 0%,#3B82F6 30%,#7C5CFF 55%,#F59E0B 75%,#EF4444 100%)",
+        boxShadow: "0 1px 4px rgba(26,34,54,0.08)",
+      }} />
+      <span style={{ fontSize: 11, color: "#9BA8BF" }}>Intelligence</span>
+      <div style={{ width: 72, height: 9, borderRadius: 99, background: "linear-gradient(to right,#F59E0B,#EF4444)" }} />
+      <span style={{ fontSize: 11, fontWeight: 700, color: "#EF4444" }}>Failure</span>
+    </div>
+  );
+}
 
 function InvestigationContent() {
   const searchParams = useSearchParams();
   const runIdParam   = searchParams.get("run_id") || "run_travel_paris_fail";
 
-  const [run,          setRun]          = useState<any>(null);
-  const [diagnosis,    setDiagnosis]    = useState<any>(null);
-  const [selectedId,   setSelectedId]   = useState<string | null>(null);
-  const [viewMode,     setViewMode]     = useState<"graph" | "timeline">("graph");
-  const [loading,      setLoading]      = useState(true);
+  const [run,        setRun]        = useState<any>(null);
+  const [diagnosis,  setDiagnosis]  = useState<any>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [viewMode,   setViewMode]   = useState<"graph" | "timeline">("graph");
+  const [loading,    setLoading]    = useState(true);
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
       fetchRun(runIdParam).catch(() => null),
       fetchDiagnosis(runIdParam).catch(() => null),
-    ]).then(([runData, diagData]) => {
-      setRun(runData);
-      setDiagnosis(diagData);
-      if (runData?.steps?.length) {
-        const suspect = runData.steps.find((s: any) => s.is_root_suspect) || runData.steps[0];
-        setSelectedId(suspect.id);
-      }
+    ]).then(([r, d]) => {
+      setRun(r); setDiagnosis(d);
+      const suspect = r?.steps?.find((s: any) => s.is_root_suspect);
+      setSelectedId(suspect?.id ?? r?.steps?.[0]?.id ?? null);
       setLoading(false);
     });
   }, [runIdParam]);
 
   if (loading || !run) {
     return (
-      <div className="flex-1 flex items-center justify-center gap-3" style={{ color: "#6B7A99" }}>
-        <Activity className="w-5 h-5 animate-spin" style={{ color: "#3B82F6" }} />
-        <span className="text-sm">Loading flight trace…</span>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", background: "#EEF2F7", gap: 12 }}>
+        <Activity style={{ width: 18, height: 18, color: "#3B82F6" }} className="animate-spin" />
+        <span style={{ fontSize: 13, color: "#6B7A99" }}>Loading flight trace…</span>
       </div>
     );
   }
 
-  const selectedStep = run.steps.find((s: any) => s.id === selectedId) || run.steps[0];
+  const selStep = run.steps.find((s: any) => s.id === selectedId) || run.steps[0];
 
   return (
-    <div className="flex flex-col h-full overflow-hidden" style={{ background: "#EEF2F7" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: "#EEF2F7" }}>
 
       {/* ── Top bar ── */}
-      <div
-        className="px-7 py-3.5 flex items-center justify-between shrink-0"
-        style={{
-          background: "#FFFFFF",
-          borderBottom: "1px solid #DDE3EE",
-          boxShadow: "0 1px 6px rgba(26,34,54,0.05)",
-        }}
-      >
-        <div className="flex items-center gap-3">
-          <Search className="w-4 h-4" style={{ color: "#3B82F6" }} />
+      <div style={{
+        flexShrink: 0, padding: "11px 22px",
+        background: "#FFFFFF", borderBottom: "1px solid #E4EAF4",
+        boxShadow: "0 1px 6px rgba(26,34,54,0.05)",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-black" style={{ color: "#1A2236" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 900, color: "#1A2236", margin: 0 }}>
                 {run.agent_name} Execution
               </h2>
-              <span
-                className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
-                style={
-                  run.status === "FAILED"
-                    ? { background: "#FFF1F2", color: "#DC2626" }
-                    : { background: "#ECFDF5", color: "#16A34A" }
-                }
-              >
+              <span style={{
+                fontSize: 9.5, fontWeight: 700, padding: "2px 8px",
+                borderRadius: 999, textTransform: "uppercase" as const,
+                ...(run.status === "FAILED"
+                  ? { background: "#FFF1F2", color: "#DC2626" }
+                  : { background: "#ECFDF5", color: "#16A34A" }),
+              }}>
                 {run.status}
               </span>
             </div>
-            <p className="text-xs mt-0.5" style={{ color: "#9BA8BF" }}>
-              {run.scenario}
-            </p>
+            <p style={{ fontSize: 11, color: "#9BA8BF", margin: "2px 0 0" }}>{run.scenario}</p>
           </div>
         </div>
 
         {/* View toggle */}
-        <div
-          className="flex items-center p-1 gap-1 rounded-xl"
-          style={{ background: "#F0F4FA", border: "1px solid #DDE3EE" }}
-        >
-          <button
-            onClick={() => setViewMode("graph")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-            style={
-              viewMode === "graph"
-                ? { background: "#FFFFFF", color: "#3B82F6", boxShadow: "0 1px 4px rgba(26,34,54,0.07)" }
-                : { color: "#6B7A99" }
-            }
-          >
-            <Waypoints className="w-3.5 h-3.5" />
-            Radial Graph
-          </button>
-          <button
-            onClick={() => setViewMode("timeline")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-            style={
-              viewMode === "timeline"
-                ? { background: "#FFFFFF", color: "#3B82F6", boxShadow: "0 1px 4px rgba(26,34,54,0.07)" }
-                : { color: "#6B7A99" }
-            }
-          >
-            <LayoutList className="w-3.5 h-3.5" />
-            Timeline
-          </button>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 4, padding: 4,
+          background: "#F2F5FB", border: "1px solid #E0E7F0", borderRadius: 12,
+        }}>
+          {([
+            { mode: "graph",    label: "Radial Graph", Icon: Waypoints    },
+            { mode: "timeline", label: "Timeline",     Icon: LayoutList   },
+          ] as const).map(({ mode, label, Icon }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "6px 14px", borderRadius: 9, fontSize: 11.5,
+                fontWeight: 600, border: "none", cursor: "pointer",
+                transition: "all 0.15s",
+                ...(viewMode === mode
+                  ? { background: "#FFFFFF", color: "#3B82F6", boxShadow: "0 1px 4px rgba(26,34,54,0.08)" }
+                  : { background: "transparent", color: "#6B7A99" }),
+              }}
+            >
+              <Icon style={{ width: 13, height: 13 }} />
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* ── Main canvas ── */}
-      <div className="flex-1 relative overflow-hidden p-5 flex gap-5">
+      {/* ── Main area ── */}
+      <div style={{ flex: 1, display: "flex", gap: 16, padding: 16, overflow: "hidden" }}>
 
-        {/* Left: graph / timeline */}
-        <div className="flex-1 flex flex-col gap-4 min-w-0 overflow-y-auto">
+        {/* Left: graph / timeline + inspector */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14, minWidth: 0, overflowY: "auto" }}>
+
           {viewMode === "graph" ? (
             <RadialGraph
               agentName={run.agent_name}
@@ -136,14 +142,11 @@ function InvestigationContent() {
               onSelectStep={setSelectedId}
             />
           ) : (
-            <div
-              className="rounded-2xl p-5"
-              style={{
-                background: "#FFFFFF",
-                border: "1px solid #DDE3EE",
-                boxShadow: "0 2px 10px rgba(26,34,54,0.05)",
-              }}
-            >
+            <div style={{
+              background: "#FFFFFF", border: "1px solid #E4EAF4",
+              borderRadius: 16, padding: 18,
+              boxShadow: "0 2px 10px rgba(26,34,54,0.05)",
+            }}>
               <Timeline
                 steps={run.steps}
                 selectedStepId={selectedId}
@@ -153,78 +156,66 @@ function InvestigationContent() {
           )}
 
           {/* Event inspector */}
-          {selectedStep && (
-            <div
-              className="rounded-2xl p-5 space-y-3"
-              style={{
-                background: "#FFFFFF",
-                border: "1px solid #DDE3EE",
-                boxShadow: "0 2px 10px rgba(26,34,54,0.05)",
-              }}
-            >
-              <div
-                className="flex items-center justify-between pb-3"
-                style={{ borderBottom: "1px solid #EEF2F7" }}
-              >
-                <div className="flex items-center gap-2">
-                  <Code2 className="w-4 h-4" style={{ color: "#3B82F6" }} />
-                  <h4 className="text-xs font-bold" style={{ color: "#1A2236" }}>
-                    Step {selectedStep.step_index}: {selectedStep.step_name}
-                    <span className="font-mono ml-1" style={{ color: "#9BA8BF" }}>
-                      ({selectedStep.tool_name})
+          {selStep && (
+            <div style={{
+              background: "#FFFFFF", border: "1px solid #E4EAF4",
+              borderRadius: 16, padding: 18,
+              boxShadow: "0 2px 10px rgba(26,34,54,0.05)",
+              flexShrink: 0,
+            }}>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                paddingBottom: 12, marginBottom: 12, borderBottom: "1px solid #EEF2F8",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Code2 style={{ width: 14, height: 14, color: "#3B82F6" }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#1A2236" }}>
+                    Step {selStep.step_index}: {selStep.step_name}
+                    <span style={{ fontSize: 11, fontFamily: "monospace", color: "#9BA8BF", marginLeft: 6 }}>
+                      ({selStep.tool_name})
                     </span>
-                  </h4>
-                  {selectedStep.is_root_suspect && (
-                    <span
-                      className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
-                      style={{ background: "#F59E0B", color: "#FFFFFF" }}
-                    >
-                      ROOT SUSPECT
-                    </span>
+                  </span>
+                  {selStep.is_root_suspect && (
+                    <span style={{
+                      fontSize: 8.5, fontWeight: 800, textTransform: "uppercase" as const,
+                      padding: "2px 7px", borderRadius: 4,
+                      background: "#F59E0B", color: "#FFFFFF",
+                    }}>ROOT SUSPECT</span>
                   )}
                 </div>
-                <span className="text-[11px] font-mono" style={{ color: "#9BA8BF" }}>
-                  {selectedStep.duration_ms?.toFixed(0)}ms
+                <span style={{ fontSize: 10.5, fontFamily: "monospace", color: "#9BA8BF" }}>
+                  {selStep.duration_ms?.toFixed(0)}ms
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 text-xs font-mono">
-                <div>
-                  <p
-                    className="text-[10px] font-bold uppercase mb-1.5"
-                    style={{ color: "#9BA8BF" }}
-                  >
-                    Input Payload
-                  </p>
-                  <pre
-                    className="p-3 rounded-xl overflow-x-auto max-h-44 text-[11px] leading-relaxed"
-                    style={{ background: "#0F172A", color: "#86EFAC" }}
-                  >
-                    {JSON.stringify(selectedStep.input_data, null, 2)}
-                  </pre>
-                </div>
-                <div>
-                  <p
-                    className="text-[10px] font-bold uppercase mb-1.5"
-                    style={{ color: "#9BA8BF" }}
-                  >
-                    Output State
-                  </p>
-                  <pre
-                    className="p-3 rounded-xl overflow-x-auto max-h-44 text-[11px] leading-relaxed"
-                    style={{ background: "#0F172A", color: "#93C5FD" }}
-                  >
-                    {JSON.stringify(selectedStep.output_data, null, 2)}
-                  </pre>
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                {[
+                  { label: "Input Payload", data: selStep.input_data, color: "#86EFAC" },
+                  { label: "Output State",  data: selStep.output_data, color: "#93C5FD" },
+                ].map(({ label, data, color }) => (
+                  <div key={label}>
+                    <p style={{ fontSize: 9.5, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: "0.04em", color: "#9BA8BF", marginBottom: 6 }}>
+                      {label}
+                    </p>
+                    <pre style={{
+                      margin: 0, padding: 12, borderRadius: 10,
+                      background: "#0F172A", color,
+                      fontSize: 10.5, lineHeight: 1.6,
+                      overflowX: "auto", maxHeight: 180,
+                      fontFamily: "JetBrains Mono, monospace",
+                    }}>
+                      {JSON.stringify(data, null, 2)}
+                    </pre>
+                  </div>
+                ))}
               </div>
             </div>
           )}
         </div>
 
-        {/* Right: floating diagnosis panel — sticky */}
+        {/* Right: floating diagnosis panel */}
         {diagnosis && (
-          <div className="shrink-0 self-start sticky top-0">
+          <div style={{ flexShrink: 0, alignSelf: "flex-start", position: "sticky", top: 0 }}>
             <DiagnosisPanel
               runId={run.id}
               suspectStepName={diagnosis.suspect_step_name}
@@ -240,23 +231,18 @@ function InvestigationContent() {
       </div>
 
       {/* ── Spectrum bar ── */}
-      <SpectrumBar />
+      <SpectrumStrip />
     </div>
   );
 }
 
 export default function InvestigationPage() {
   return (
-    <Suspense
-      fallback={
-        <div
-          className="flex-1 flex items-center justify-center text-sm"
-          style={{ color: "#6B7A99" }}
-        >
-          Loading investigation…
-        </div>
-      }
-    >
+    <Suspense fallback={
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#6B7A99" }}>
+        Loading investigation…
+      </div>
+    }>
       <InvestigationContent />
     </Suspense>
   );

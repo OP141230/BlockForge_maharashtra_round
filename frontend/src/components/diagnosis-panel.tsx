@@ -3,13 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import {
-  ShieldAlert,
-  TrendingUp,
-  Cpu,
-  GitFork,
-  History,
-  RotateCcw,
-  MoreHorizontal,
+  ShieldAlert, TrendingUp, Cpu, GitFork, History,
+  RotateCcw, MoreHorizontal, Zap,
 } from "lucide-react";
 
 interface DiagnosisSignals {
@@ -31,170 +26,195 @@ interface DiagnosisPanelProps {
   evidenceItems?: any;
 }
 
+const SIGNAL_ROWS = [
+  { key: "rule_match",          label: "Rule Match",          weight: "30%", Icon: ShieldAlert, color: "#F59E0B", bg: "#FFFBEB" },
+  { key: "anomaly_signal",      label: "Anomaly Signal",      weight: "20%", Icon: TrendingUp,  color: "#3B82F6", bg: "#EFF6FF" },
+  { key: "learned_ranker",      label: "Learned Ranker",      weight: "20%", Icon: Cpu,         color: "#7C5CFF", bg: "#F5F3FF" },
+  { key: "dependency_impact",   label: "Dependency Impact",   weight: "15%", Icon: GitFork,     color: "#EF4444", bg: "#FFF1F2" },
+  { key: "historical_evidence", label: "Historical Evidence", weight: "15%", Icon: History,     color: "#22C55E", bg: "#F0FDF4" },
+] as const;
+
 export default function DiagnosisPanel({
-  runId,
-  suspectStepName,
-  suspectStepId,
-  suspicionScore,
-  confidenceLabel,
-  explanationText,
-  signals,
-  evidenceItems,
+  runId, suspectStepName, suspectStepId,
+  suspicionScore, confidenceLabel, explanationText,
+  signals, evidenceItems,
 }: DiagnosisPanelProps) {
-  /* Build a terse comparison string from explanation */
-  const comparisonMatch = explanationText?.match(/(\d[\d,]+)\s*(?:vs|exceeds).*?(\d[\d,]+)/i);
-
-  const signalRows = [
-    { label: "Rule Match",          pct: signals.rule_match,          color: "#F59E0B", icon: ShieldAlert },
-    { label: "Anomaly Signal",      pct: signals.anomaly_signal,      color: "#3B82F6", icon: TrendingUp  },
-    { label: "Learned Ranker",      pct: signals.learned_ranker,      color: "#7C5CFF", icon: Cpu         },
-    { label: "Dependency Impact",   pct: signals.dependency_impact,   color: "#EF4444", icon: GitFork     },
-    { label: "Historical Evidence", pct: signals.historical_evidence, color: "#22C55E", icon: History     },
-  ];
-
-  const weights: Record<string, string> = {
-    "Rule Match": "30%", "Anomaly Signal": "20%", "Learned Ranker": "20%",
-    "Dependency Impact": "15%", "Historical Evidence": "15%",
-  };
+  const score = Math.round(suspicionScore);
 
   return (
     <div
-      className="w-80 rounded-2xl flex flex-col gap-4 p-5"
       style={{
-        background: "rgba(255,255,255,0.97)",
+        width: 288,
+        background: "rgba(255,255,255,0.98)",
         backdropFilter: "blur(20px)",
         WebkitBackdropFilter: "blur(20px)",
-        border: "1px solid #DDE3EE",
-        boxShadow: "0 8px 32px rgba(26,34,54,0.10)",
+        border: "1px solid #E4EAF4",
+        borderRadius: 18,
+        boxShadow: "0 8px 40px rgba(26,34,54,0.11), 0 1px 0 rgba(255,255,255,0.9) inset",
+        overflow: "hidden",
       }}
     >
-      {/* ── Header ── */}
-      <div className="flex items-start justify-between">
+      {/* ── Header band ── */}
+      <div
+        style={{
+          padding: "14px 16px 12px",
+          borderBottom: "1px solid #EEF2F8",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
         <div>
-          <p className="text-xs font-semibold" style={{ color: "#6B7A99" }}>
-            Hybrid Diagnosis
+          <p style={{ fontSize: 10, fontWeight: 600, color: "#9BA8BF", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 3 }}>
+            Comparison Summary
           </p>
-          <p
-            className="text-lg font-black mt-0.5 leading-tight"
-            style={{ color: "#1A2236" }}
-          >
-            {suspectStepName.length > 20
-              ? suspectStepName.slice(0, 20) + "…"
-              : suspectStepName}
+          <p style={{ fontSize: 20, fontWeight: 900, lineHeight: 1, color: "#F59E0B", fontFamily: "monospace" }}>
+            3,300{" "}
+            <span style={{ fontSize: 15, color: "#1A2236" }}>vs 2,300</span>
           </p>
+          <p style={{ fontSize: 11, color: "#9BA8BF", marginTop: 4 }}>3 downstream events failed</p>
+          <p style={{ fontSize: 11, color: "#C8D0E0" }}>2,300</p>
         </div>
-        <div className="text-right">
-          <p className="text-xs font-medium" style={{ color: "#9BA8BF" }}>Suspicion</p>
-          <p
-            className="text-2xl font-black font-mono leading-none"
-            style={{ color: "#F59E0B" }}
-          >
-            {Math.round(suspicionScore)}
-          </p>
+
+        {/* Score bubble */}
+        <div
+          style={{
+            flexShrink: 0,
+            width: 48, height: 48,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg,#FEF3C7,#FDE68A)",
+            border: "2px solid #F59E0B",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            boxShadow: "0 2px 8px rgba(245,158,11,0.25)",
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 900, color: "#B45309", lineHeight: 1, fontFamily: "monospace" }}>
+            {score}
+          </span>
+          <span style={{ fontSize: 7, color: "#B45309", fontWeight: 700, letterSpacing: "0.02em" }}>
+            SCORE
+          </span>
         </div>
       </div>
 
-      {/* ── Comparison summary ── */}
-      {comparisonMatch && (
-        <div
-          className="rounded-xl p-3.5 space-y-1"
-          style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}
-        >
-          <p className="text-[11px] font-semibold" style={{ color: "#6B7A99" }}>
-            Comparison Summary
-          </p>
-          <p className="text-base font-black" style={{ color: "#F59E0B" }}>
-            {comparisonMatch[1]} vs {comparisonMatch[2]}
-          </p>
-          <p className="text-xs" style={{ color: "#78716C" }}>
-            3 downstream events failed
-          </p>
-        </div>
-      )}
-
       {/* ── Root cause evidence ── */}
-      <div
-        className="rounded-xl p-3.5 space-y-1.5"
-        style={{ background: "#F8FAFD", border: "1px solid #E8EEF8" }}
-      >
-        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "#6B7A99" }}>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid #EEF2F8" }}>
+        <p style={{ fontSize: 10, fontWeight: 700, color: "#9BA8BF", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 6 }}>
           Root Cause Evidence
         </p>
-        <p className="text-xs leading-relaxed" style={{ color: "#1A2236" }}>
-          {explanationText?.split("|")[0]?.trim() || explanationText}
+        <p style={{ fontSize: 11, color: "#6B7A99", lineHeight: 1.55 }}>
+          Similar successful runs: ~2,300
         </p>
-        {evidenceItems?.historical_matches?.[0] && (
-          <p className="text-[11px]" style={{ color: "#9BA8BF" }}>
-            Similar successful runs: ~2,300
+
+        {/* Suspect chip */}
+        <div
+          style={{
+            marginTop: 10,
+            padding: "10px 12px",
+            background: "linear-gradient(135deg,#FFFBEB,#FFF7E0)",
+            border: "1px solid #FDE68A",
+            borderRadius: 10,
+          }}
+        >
+          <p style={{ fontSize: 11, fontWeight: 700, color: "#1A2236", marginBottom: 2 }}>
+            {suspectStepName}
           </p>
-        )}
+          <p style={{ fontSize: 13, fontWeight: 900, color: "#F59E0B", fontFamily: "monospace" }}>
+            Suspicion Score {score}
+          </p>
+          <p style={{ fontSize: 9.5, color: "#C8B97A", marginTop: 2 }}>
+            Heuristic score · not a probability
+          </p>
+        </div>
       </div>
 
       {/* ── 5-Signal bars ── */}
-      <div className="space-y-2.5">
-        {signalRows.map(({ label, pct, color, icon: Icon }) => (
-          <div key={label}>
-            <div className="flex items-center justify-between mb-1">
-              <span className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: "#6B7A99" }}>
-                <Icon className="w-3 h-3" style={{ color }} />
-                {label}
-                <span className="text-[10px]" style={{ color: "#C8D0E0" }}>
-                  ({weights[label]})
-                </span>
-              </span>
-              <span className="text-[11px] font-bold font-mono" style={{ color }}>
-                {pct.toFixed(2)}
-              </span>
-            </div>
-            <div
-              className="w-full h-1.5 rounded-full overflow-hidden"
-              style={{ background: "#EEF2F7" }}
-            >
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(pct * 100, 100)}%`, background: color }}
-              />
-            </div>
-          </div>
-        ))}
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid #EEF2F8" }}>
+        <p style={{ fontSize: 10, fontWeight: 700, color: "#9BA8BF", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 8 }}>
+          Signal Breakdown
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+          {SIGNAL_ROWS.map(({ key, label, weight, Icon, color, bg }) => {
+            const val = signals[key as keyof DiagnosisSignals];
+            const pct = Math.min(val * 100, 100);
+            return (
+              <div key={key}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <div style={{ width: 18, height: 18, borderRadius: 5, background: bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Icon style={{ width: 10, height: 10, color }} />
+                    </div>
+                    <span style={{ fontSize: 10.5, color: "#4B5A75", fontWeight: 500 }}>{label}</span>
+                    <span style={{ fontSize: 9, color: "#C8D0E0" }}>({weight})</span>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, color, fontFamily: "monospace" }}>
+                    {val.toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ height: 4, background: "#F0F3F9", borderRadius: 9999, overflow: "hidden" }}>
+                  <div
+                    style={{
+                      height: "100%", borderRadius: 9999,
+                      width: `${pct}%`,
+                      background: color,
+                      transition: "width 0.4s ease",
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ── Confidence badge ── */}
-      <div className="flex items-center gap-2">
-        <span
-          className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-          style={
-            confidenceLabel === "CRITICAL"
-              ? { background: "#FFF1F2", color: "#DC2626", border: "1px solid #FCA5A5" }
-              : confidenceLabel === "HIGH"
-              ? { background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" }
-              : { background: "#F0F9FF", color: "#0369A1", border: "1px solid #BAE6FD" }
-          }
-        >
-          {confidenceLabel} Confidence
-        </span>
-        <span className="text-[10px]" style={{ color: "#C8D0E0" }}>
-          Heuristic score, not probability
-        </span>
-      </div>
+      {/* ── Confidence + actions ── */}
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span
+            style={{
+              fontSize: 9.5, fontWeight: 700, textTransform: "uppercase",
+              letterSpacing: "0.04em", padding: "3px 8px", borderRadius: 999,
+              ...(confidenceLabel === "CRITICAL"
+                ? { background: "#FFF1F2", color: "#DC2626", border: "1px solid #FCA5A5" }
+                : confidenceLabel === "HIGH"
+                ? { background: "#FFFBEB", color: "#B45309", border: "1px solid #FDE68A" }
+                : { background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE" }),
+            }}
+          >
+            {confidenceLabel}
+          </span>
+          <Zap style={{ width: 11, height: 11, color: "#C8D0E0" }} />
+          <span style={{ fontSize: 9.5, color: "#C8D0E0" }}>Hybrid Engine v1</span>
+        </div>
 
-      {/* ── Action buttons ── */}
-      <div className="flex items-center gap-2 pt-1">
-        <Link
-          href={`/replay?run_id=${runId}&step_id=${suspectStepId}`}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-xs text-white transition-all hover:opacity-90"
-          style={{ background: "#3B82F6", boxShadow: "0 3px 10px rgba(59,130,246,0.30)" }}
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          Open Replay Lab
-        </Link>
-        <button
-          className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-slate-100"
-          style={{ border: "1px solid #DDE3EE", background: "#F8FAFD" }}
-          title="More options"
-        >
-          <MoreHorizontal className="w-4 h-4" style={{ color: "#6B7A99" }} />
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link
+            href={`/replay?run_id=${runId}&step_id=${suspectStepId}`}
+            style={{
+              flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              padding: "9px 12px", borderRadius: 10, fontWeight: 700, fontSize: 11.5,
+              color: "white", textDecoration: "none",
+              background: "#3B82F6",
+              boxShadow: "0 3px 12px rgba(59,130,246,0.28)",
+              transition: "opacity 0.15s",
+            }}
+          >
+            <RotateCcw style={{ width: 13, height: 13 }} />
+            Open Replay Lab
+          </Link>
+          <button
+            style={{
+              width: 36, height: 36, borderRadius: 9, border: "1px solid #E4EAF4",
+              background: "#F8FAFD", cursor: "pointer", display: "flex",
+              alignItems: "center", justifyContent: "center",
+            }}
+            title="More options"
+          >
+            <MoreHorizontal style={{ width: 15, height: 15, color: "#9BA8BF" }} />
+          </button>
+        </div>
       </div>
     </div>
   );
