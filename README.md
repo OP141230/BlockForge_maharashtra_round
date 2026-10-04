@@ -117,9 +117,9 @@ Side-effect tools that are always BLOCKED:
 
 ## Flagship Demo — TravelPlanner Paris Budget Failure
 
-The demo traces a family trip planner agent booking Paris for 7 days, €2,500 budget.
+The demo traces a family trip planner agent booking Paris for 7 days, $2,500 budget.
 
-**The bug:** `budget_calculation` adds accommodation cost twice (€900 + €900), producing a total of €3,300 — €800 over budget — causing `budget_validation`, `itinerary_generation` and `final_response` to fail.
+**The bug:** `budget_calculation` adds accommodation cost twice ($900 + $900), producing a total of $2,950 — $450 over the $2,500 budget (the corrected total is $2,050) — causing `budget_validation`, `itinerary_generation` and `final_response` to fail.
 
 **BLACKBOX ranks `budget_calculation` as the top suspect for this flagship failure** (it is not the first erroring step; the failure surfaces later in `select_itinerary`). This is a single demonstrative case. See the Evaluation section below for the honest aggregate numbers: on the small benchmark the hybrid is competitive with, not clearly better than, the rule-only baseline.
 

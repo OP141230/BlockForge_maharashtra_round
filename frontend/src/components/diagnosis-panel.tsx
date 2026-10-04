@@ -70,11 +70,10 @@ export default function DiagnosisPanel({
             Comparison Summary
           </p>
           <p style={{ fontSize: 20, fontWeight: 900, lineHeight: 1, color: "#F59E0B", fontFamily: "monospace" }}>
-            3,300{" "}
-            <span style={{ fontSize: 15, color: "#1A2236" }}>vs 2,300</span>
+            2,950{" "}
+            <span style={{ fontSize: 15, color: "#1A2236" }}>vs 2,050 (corrected)</span>
           </p>
           <p style={{ fontSize: 11, color: "#9BA8BF", marginTop: 4 }}>3 downstream events failed</p>
-          <p style={{ fontSize: 11, color: "#C8D0E0" }}>2,300</p>
         </div>
 
         {/* Score bubble */}
@@ -105,7 +104,7 @@ export default function DiagnosisPanel({
           Root Cause Evidence
         </p>
         <p style={{ fontSize: 11, color: "#6B7A99", lineHeight: 1.55 }}>
-          Similar successful runs: ~2,300
+          Corrected replay total: 2,050 (budget 2,500)
         </p>
 
         {/* Suspect chip */}
