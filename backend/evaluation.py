@@ -14,7 +14,7 @@ class BenchmarkRunner:
 
     @staticmethod
     def get_benchmark_cases() -> List[Dict[str, Any]]:
-        """Return 15 labeled test cases with known ground-truth root causes.
+        """Return 15 labeled cases (14 are scorable) with known ground-truth root causes.
 
         Design constraints (anti-leakage / anti-trivial-baseline):
         ──────────────────────────────────────────────────────────
@@ -254,7 +254,11 @@ class BenchmarkRunner:
         time (ranker.py).  None of the benchmark case IDs appear in that
         corpus — there is no train/test leakage.
         """
-        all_cases  = cls.get_benchmark_cases()
+        raw_cases  = cls.get_benchmark_cases()
+        # A "No Fault" run has no real root cause, so it cannot be scored for
+        # localization. It is excluded from ranking metrics (kept as a
+        # specificity fixture) instead of being counted with a made-up label.
+        all_cases  = [c for c in raw_cases if not c["fault_category"].startswith("No Fault")]
         test_cases = [c for c in all_cases if c.get("split", "TEST") == "TEST"]
         val_cases  = [c for c in all_cases if c.get("split") == "VALIDATION"]
 
@@ -336,7 +340,7 @@ class BenchmarkRunner:
             "validation_cases": len(val_cases),
             "split_note":     (
                 "Primary metrics are on the held-out TEST split (10 cases). "
-                "VALIDATION split (5 cases) is a secondary overfitting check. "
+                "VALIDATION split (4 scorable cases; the no-fault fixture is excluded) is a secondary overfitting check. "
                 "Ranker training corpus is entirely separate — no leakage."
             ),
             "evaluated_at": datetime.now(timezone.utc).isoformat(),

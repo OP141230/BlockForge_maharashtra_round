@@ -16,7 +16,7 @@ def test_benchmark_metrics():
     assert "test_cases" in report
     assert "validation_cases" in report
     assert report["test_cases"] >= 10
-    assert report["validation_cases"] >= 5
+    assert report["validation_cases"] == 4  # no-fault fixture excluded from scoring
 
     models = report["models"]  # TEST split metrics
     hybrid    = models["blackbox_hybrid"]

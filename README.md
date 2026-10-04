@@ -94,7 +94,7 @@ Pattern signatures use **general domain language only** — no step or tool name
 
 ## Replay Engine — Mode and Limitations
 
-Replay operates in **fixture-propagation / deterministic-registry mode**:
+Replay operates in **fixture-propagation / deterministic-registry mode**. Upstream context (budget, flight price, hotel price) is **derived from the recorded trace** of the REUSED steps; documented defaults are used only for values the trace never recorded. Downstream operations are re-executed through a deterministic registry of the demo agent's tools:
 
 | Step position | What happens | Label surfaced |
 |---|---|---|
@@ -121,32 +121,32 @@ The demo traces a family trip planner agent booking Paris for 7 days, €2,500 b
 
 **The bug:** `budget_calculation` adds accommodation cost twice (€900 + €900), producing a total of €3,300 — €800 over budget — causing `budget_validation`, `itinerary_generation` and `final_response` to fail.
 
-**BLACKBOX isolates `budget_calculation` as the root cause with Suspicion Score 91**, ahead of the first error step and the slowest step, demonstrating that the hybrid engine genuinely outperforms simple heuristics.
+**BLACKBOX ranks `budget_calculation` as the top suspect for this flagship failure** (it is not the first erroring step; the failure surfaces later in `select_itinerary`). This is a single demonstrative case. See the Evaluation section below for the honest aggregate numbers: on the small benchmark the hybrid is competitive with, not clearly better than, the rule-only baseline.
 
 ---
 
 ## Evaluation Studio
 
-Benchmarks run against **15 labeled test cases** (10 TEST + 5 VALIDATION split) with known ground-truth root causes. Design constraints that prevent trivial baselines from winning:
+Benchmarks run against **14 scorable labeled cases** (10 TEST + 4 VALIDATION) with known ground-truth root causes. A 15th "no fault" fixture is kept for specificity checks but is **excluded from ranking metrics** because a healthy run has no root cause to localize. Design constraints that prevent trivial baselines from winning:
 
 - Root cause is **not** always the first failing step
-- Root cause is **not** always the slowest step  
+- Root cause is **not** always the slowest step
 - Root cause is **not** always the last step
-- Cases 10–14 are a held-out VALIDATION split — reported separately to check for overfitting
-- Learned Ranker training corpus is built from separate templates — **no leakage into test cases**
+- VALIDATION cases are reported separately to check for overfitting
+- Learned Ranker training corpus is built from separate templates (no shared case IDs)
 
-Actual results on the TEST split (10 cases) after the changes in this commit:
+**Measured results** (deterministic; reproduce with `python -c "from backend.evaluation import BenchmarkRunner as B; print(B.run_benchmark()['models'])"` or `POST /api/evaluation/run`):
 
-| Model | Top-1 | Top-3 | MRR |
-|---|---|---|---|
-| **BLACKBOX Hybrid** | run `POST /api/evaluation/run` to see live numbers | — | — |
-| Rule-Only | — | — | — |
-| Last-Step Heuristic | — | — | — |
-| Anomaly-Only | — | — | — |
+| Model | TEST Top-1 | TEST Top-3 | TEST MRR (n=10) | VAL Top-1 | VAL MRR (n=4) |
+|---|---|---|---|---|---|
+| BLACKBOX Hybrid | 0.30 | **0.70** | **0.525** | 0.25 | 0.542 |
+| Rule-Only | 0.30 | 0.60 | 0.500 | **0.50** | **0.708** |
+| Anomaly-Only | 0.30 | 0.60 | 0.503 | 0.25 | 0.500 |
+| Last-Step Heuristic | 0.00 | 0.40 | 0.270 | 0.25 | 0.500 |
 
-> Numbers are computed live by the engine — see Evaluation Studio in the UI or `POST /api/evaluation/run`. They are not pre-baked into the README to avoid stale figures.
+**How to read this honestly:** on TEST the hybrid has the best Top-3 and MRR, but only by 1 case in Top-3 and ~0.02 in MRR over the rule-only baseline, and Top-1 is tied at 0.30. On the tiny VALIDATION split rule-only is better. With n=10 and n=4 none of these differences is statistically meaningful. The one robust result is that every engine beats the last-step heuristic. We do **not** claim the hybrid outperforms simple heuristics; improving Top-1 (better fixtures, tuned weights on a larger set) is listed under future work.
 
-> **Small benchmark caveat:** 15 cases is modest. Results are illustrative of the approach. Counts are shown alongside percentages throughout the UI.
+> **Small benchmark caveat:** results are illustrative only. Counts are shown alongside percentages throughout the UI. Fixtures are hand-written synthetic traces.
 
 ---
 
@@ -235,7 +235,7 @@ No API keys required. BLACKBOX runs fully offline.
 ## Running Tests
 
 ```bash
-# All 17 backend tests
+# All 18 backend tests
 python -m pytest backend/tests/ -v
 ```
 
@@ -262,7 +262,7 @@ BlockForge_maharashtra_round/
 │   │   ├── dependencies.py       # DAG dependency scoring
 │   │   ├── historical.py         # TF-IDF pattern matching
 │   │   └── ranker.py             # Logistic regression ranker
-│   └── tests/                    # 17 pytest tests
+│   └── tests/                    # 18 pytest tests
 ├── frontend/
 │   └── src/
 │       ├── app/                  # Next.js App Router pages
@@ -277,7 +277,8 @@ BlockForge_maharashtra_round/
 
 ## Known Limitations
 
-- Benchmark has 15 labeled cases (10 test, 5 validation) — results are illustrative, not production-grade
+- Benchmark has 14 scorable labeled cases (10 test, 4 validation); the hybrid does not clearly beat the rule-only baseline at this size, and Top-1 is only 0.30
+- Benchmark and seed traces are hand-written synthetic fixtures (`seed.py`, `evaluation.py`), not output from an agent run with injected faults
 - Anomaly engine uses z-score fallback; Isolation Forest requires ≥30 events per operation key — not reached by the current seed data
 - Learned Ranker is trained on a **programmatically generated** synthetic corpus, not real agent production traces. The training and test distributions are similar by construction — real-world accuracy would differ
 - Replay operates in fixture-propagation mode (deterministic registry), not live agent restart — clearly documented in the API response and README

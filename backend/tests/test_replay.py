@@ -45,3 +45,16 @@ def test_replay_counterfactual_fix():
     # Check diff summary
     diff_s1 = replay_result["diff_summary"]["s1"]
     assert diff_s1["replayed_output"]["total_cost"] == 2050
+
+
+def test_replay_context_comes_from_recorded_upstream():
+    """Replay must propagate recorded upstream values, not hardcoded constants."""
+    from backend.replay import ReplayEngine
+    steps = [
+        {"id": "a", "step_index": 0, "step_name": "p", "tool_name": "parse_requirements", "status": "SUCCESS", "output_data": {"budget": 4000}},
+        {"id": "b", "step_index": 1, "step_name": "f", "tool_name": "search_flights", "status": "SUCCESS", "output_data": {"price": 1234}},
+    ]
+    ctx = ReplayEngine._context_from_recorded(steps)
+    assert ctx["budget_limit"] == 4000
+    assert ctx["flight_price"] == 1234
+    assert ctx["hotel_price"] == 900  # unrecorded -> documented default

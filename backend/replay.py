@@ -133,7 +133,7 @@ class ReplayEngine:
             }, False, None
 
         elif tool_name == "select_itinerary":
-            total_cost = context.get("total_cost", 2050)
+            total_cost = context.get("total_cost", context.get("flight_price", 750) + context.get("hotel_price", 900) + context.get("activities_price", 400))
             budget_limit = context.get("budget_limit", 2500)
             if total_cost > budget_limit:
                 raise ValueError(f"Budget validation failed: Total {total_cost} exceeds allowable limit {budget_limit}")
@@ -145,7 +145,7 @@ class ReplayEngine:
             }, False, None
 
         elif tool_name == "finalize_booking":
-            total_cost = context.get("total_cost", 2050)
+            total_cost = context.get("total_cost", context.get("flight_price", 750) + context.get("hotel_price", 900) + context.get("activities_price", 400))
             budget_limit = context.get("budget_limit", 2500)
             if total_cost > budget_limit:
                 raise ValueError(f"Cannot finalize: budget limit violation {total_cost} > {budget_limit}")
@@ -203,14 +203,10 @@ class ReplayEngine:
                 "is_intervention_point": False,
             })
 
-        # State context passed through downstream execution
-        pipeline_context = {
-            "budget_limit": 2500,
-            "flight_price": 750,
-            "hotel_price": 900,
-            "activities_price": 400,
-            "total_cost": 2050,
-        }
+        # State context passed through downstream execution.
+        # Derived from the RECORDED outputs of the REUSED upstream steps, so the
+        # replay propagates real recorded values rather than hardcoded constants.
+        pipeline_context = cls._context_from_recorded(sorted_steps[:intervene_idx])
 
         overall_status = "SUCCESS"
 
@@ -292,6 +288,7 @@ class ReplayEngine:
                 "The intervention step is MODIFIED and re-executed via the deterministic "
                 "operation registry. Downstream steps are REPLAYED with propagated state. "
                 "Side-effect tools are BLOCKED and never called externally. "
+                "Upstream values (budget, flight, hotel) come from the recorded trace. "
                 "This is NOT a live agent restart."
             ),
             "replayed_steps": replayed_steps,
@@ -303,6 +300,32 @@ class ReplayEngine:
                 "it does not constitute formal proof of causality."
             ),
         }
+
+    @staticmethod
+    def _context_from_recorded(upstream_steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build replay context from recorded upstream outputs (REUSED steps).
+
+        Falls back to documented defaults only for keys that were never
+        recorded, so a trace that did record them always wins.
+        """
+        ctx: Dict[str, Any] = {}
+        for st in upstream_steps:
+            out = st.get("output_data") or {}
+            tool = st.get("tool_name")
+            if tool == "parse_requirements":
+                ctx["budget_limit"] = out.get("budget_limit", out.get("budget", ctx.get("budget_limit")))
+            elif tool == "search_flights":
+                sel = out.get("selected_flight") or {}
+                ctx["flight_price"] = sel.get("price", out.get("price", ctx.get("flight_price")))
+            elif tool == "search_accommodations":
+                sel = out.get("selected_hotel") or {}
+                ctx["hotel_price"] = sel.get("price_total", out.get("price", ctx.get("hotel_price")))
+        defaults = {"budget_limit": 2500, "flight_price": 750, "hotel_price": 900, "activities_price": 400}
+        for k, v in defaults.items():
+            if ctx.get(k) is None:
+                ctx[k] = v
+        ctx["context_source"] = "recorded upstream outputs (defaults only for unrecorded keys)"
+        return ctx
 
     @staticmethod
     def _compute_diff(orig: Any, new: Any) -> Dict[str, Any]:
