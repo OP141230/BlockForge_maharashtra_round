@@ -19,6 +19,10 @@ No LLM is used anywhere in the diagnosis loop. Diagnosis is deterministic
 invariant checking plus small trained models. An LLM could narrate the
 output, but it never decides anything.
 
+## Presentation
+
+- **Slide deck(PDF):** [BLACKBOX Presentation](docs/BlockForge_BNB.pdf)
+
 ## Coverage of the brief
 
 - Execution data: per-step traces with state checkpoints (`recorder/`)
@@ -349,3 +353,4 @@ Ablation Study, Fail Detection AUC, and baseline comparisons.
   bulk-generated set with label noise it reached 90/100.
 - The ranker is deliberately small (linear, a few hundred traces). The contribution of
   this project is the record-diagnose-prove pipeline, not model scale.
+
