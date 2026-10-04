@@ -227,7 +227,11 @@ class EvaluationBenchmark(Base):
             "top1_accuracy": round(self.top1_accuracy, 3),
             "top3_accuracy": round(self.top3_accuracy, 3),
             "mrr": round(self.mrr, 3),
+            # "models" is the key the frontend and evaluation page both read
+            "models": json.loads(self.baselines_json) if self.baselines_json else {},
+            # keep "baselines" as an alias so nothing breaks
             "baselines": json.loads(self.baselines_json) if self.baselines_json else {},
+            "detailed_cases": json.loads(self.detailed_results_json) if self.detailed_results_json else [],
             "detailed_results": json.loads(self.detailed_results_json) if self.detailed_results_json else [],
             "evaluated_at": self.evaluated_at.isoformat() if self.evaluated_at else None,
         }
