@@ -6,18 +6,6 @@
 
 ---
 
-## 📎 Presentation & Demo
-
-<!-- Add your hackathon PPT PDF below -->
-**Slide Deck (PDF):**
-`[Attach PDF here]`
-
-<!-- Add your demo video link below -->
-**Demo Video:**
-`[Attach demo video link here]`
-
----
-
 ## The Problem
 
 Modern AI agents — travel planners, code fixers, customer support bots — operate as black boxes. When they fail, engineers have no systematic way to answer:
@@ -47,12 +35,12 @@ WHAT IF WE CHANGE IT  →  DID THE CHANGE FIX IT  →  HOW ACCURATE IS BLACKBOX
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                     BLACKBOX Frontend                         │
+│                     BLACKBOX Frontend                        │
 │         Next.js 14 · TypeScript · Tailwind CSS               │
-│   Overview · Executions · Investigation · Replay Lab          │
+│   Overview · Executions · Investigation · Replay Lab         │
 │   Comparison · Evaluation Studio · Failure Patterns          │
 ├──────────────────────────────────────────────────────────────┤
-│                    FastAPI REST API                           │
+│                    FastAPI REST API                          │
 │              /runs  /diagnose  /replay  /compare             │
 │              /evaluation  /patterns  /health                 │
 ├────────────┬─────────────┬────────────┬──────────────────────┤
